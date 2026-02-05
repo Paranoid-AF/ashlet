@@ -1,0 +1,28 @@
+# Go
+daemon/ashletd
+daemon/bin/
+*.exe
+*.test
+*.out
+
+# Model weights
+model/models/
+*.gguf
+*.bin
+
+# llama.cpp build artifacts
+model/llama.cpp/
+
+# Unix socket files
+*.sock
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Editor
+*.swp
+*.swo
+*~
+.idea/
+.vscode/
