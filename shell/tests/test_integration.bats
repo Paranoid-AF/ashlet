@@ -73,14 +73,14 @@ run_zsh() {
 # Error Response Tests
 # =============================================================================
 
-@test "integration: model_not_found error handling" {
-    local error_response='{"request_id":1,"candidates":[],"error":{"code":"model_not_found","message":"missing model files","models":[{"name":"generation","url":"http://example.com/model.gguf","file":"model.gguf","dir":"/tmp/models"}]}}'
+@test "integration: api_error error handling" {
+    local error_response='{"request_id":1,"candidates":[],"error":{"code":"api_error","message":"request failed"}}'
 
     run_zsh ".ashlet:has-error '$error_response'"
     [ "$status" -eq 0 ]
 
     run_zsh ".ashlet:error-code '$error_response'"
-    [ "$output" = "model_not_found" ]
+    [ "$output" = "api_error" ]
 }
 
 @test "integration: empty candidates array is not an error" {

@@ -29,11 +29,11 @@ Dependency graph (no cycles): `root (ashlet) ← index ← generate ← serve (m
 Config file: `~/.config/ashlet/config.json` (created on-demand via `ashlet` command)
 Prompt file: `~/.config/ashlet/prompt.md` (created on-demand via `ashlet` command)
 
-### Config Schema (v2)
+### Config Schema
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "generation": {
     "base_url": "https://openrouter.ai/api/v1",
     "api_key": "",
@@ -107,6 +107,27 @@ Single Go module at project root:
 - `serve/` — daemon entry point and Unix socket server
 - `generate/` — completion orchestration, context gathering, inference via API
 - `index/` — history indexing, embedding via API
+
+## Development
+
+Two `_run.sh` scripts launch the daemon and shell client separately. Open two terminals to test end-to-end:
+
+**Terminal 1 — daemon** (`_run.sh` at project root):
+
+```bash
+./_run.sh            # build ashletd and start it
+./_run.sh --verbose  # same, with request/response logging
+```
+
+Runs `make build` then `exec ./ashletd`. Stays in the foreground so you see logs. Use `--verbose` to log every request/response.
+
+**Terminal 2 — shell client** (`shell/_run.sh`):
+
+```bash
+./shell/_run.sh
+```
+
+Checks for dependencies (`zsh`, `socat`, `jq`), then launches an interactive zsh session with ashlet pre-loaded via a temporary `ZDOTDIR`. Type commands to see completions.
 
 ## Design Constraints
 

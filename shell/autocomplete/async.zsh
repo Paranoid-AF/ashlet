@@ -109,12 +109,6 @@ zle -N .ashlet:wait-callback
 
     # Check for errors
     if .ashlet:has-error "$data"; then
-        local code
-        code="$(.ashlet:error-code "$data")"
-        if [[ "$code" == "model_not_found" ]] && (( ! _ashlet_download_declined )); then
-            # Will be handled on next init, don't spam user
-            :
-        fi
         return
     fi
 

@@ -25,7 +25,6 @@ The shell client provides AI-powered command-line completion by:
 │                       │  ├── client/socket.zsh   (socket resolution)    │ │
 │                       │  ├── client/request.zsh  (IPC requests)         │ │
 │                       │  ├── client/response.zsh (JSON parsing)         │ │
-│                       │  ├── client/download.zsh (model download)       │ │
 │                       │  ├── state.zsh           (state management)     │ │
 │                       │  ├── display.zsh         (POSTDISPLAY)          │ │
 │                       │  ├── async.zsh           (sysopen + zselect)    │ │
@@ -60,7 +59,6 @@ The shell client provides AI-powered command-line completion by:
 | `client/socket.zsh`            | Socket path resolution                                |
 | `client/request.zsh`           | IPC request building and sending                      |
 | `client/response.zsh`          | JSON response parsing (jq-based)                      |
-| `client/download.zsh`          | Model download logic                                  |
 | `_run.sh`                      | Debug launcher for development/testing                |
 
 ### Design Principles
@@ -121,9 +119,8 @@ The shell client provides AI-powered command-line completion by:
 | `candidates[].confidence` | float   | Model confidence (0.0–1.0)                       |
 | `candidates[].cursor_pos` | int?    | Cursor position after apply (null = end)         |
 | `error`                   | object? | Error details if request failed                  |
-| `error.code`              | string  | Machine-readable code (e.g., `model_not_found`)  |
+| `error.code`              | string  | Machine-readable code (e.g., `not_configured`)    |
 | `error.message`           | string  | Human-readable description                       |
-| `error.models`            | array?  | Model download info for `model_not_found`        |
 
 ## State Machine
 
@@ -328,16 +325,13 @@ Uses `POSTDISPLAY` and `region_highlight`:
 | `zsh`    | Shell (5.3+)      | Yes           |
 | `jq`     | JSON parsing      | Yes           |
 | `socat`  | Unix socket IPC   | Yes           |
-| `aria2c` | Parallel download | No (fallback) |
-| `curl`   | HTTP download     | No (fallback) |
-| `wget`   | HTTP download     | No (fallback) |
 
 ## Error Handling
 
 | Error Code              | Behavior                                                    |
 | ----------------------- | ----------------------------------------------------------- |
-| `model_not_found`       | Prompt download on first occurrence, suppress after decline |
-| `inference_unavailable` | Silent (llama-server not running)                           |
+| `not_configured`        | Silent fail (API key missing)                               |
+| `api_error`             | Silent fail (API request failed)                            |
 | Socket not found        | Silent fail (daemon not running)                            |
 | Empty response          | Silent fail                                                 |
 | JSON parse error        | Silent fail                                                 |

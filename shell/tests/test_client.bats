@@ -130,7 +130,7 @@ run_zsh() {
 # =============================================================================
 
 @test ".ashlet:has-error: returns 0 when error present" {
-    run_zsh '.ashlet:has-error '"'"'{"request_id":1,"candidates":[],"error":{"code":"model_not_found","message":"missing"}}'"'"
+    run_zsh '.ashlet:has-error '"'"'{"request_id":1,"candidates":[],"error":{"code":"api_error","message":"request failed"}}'"'"
     [ "$status" -eq 0 ]
 }
 
@@ -140,9 +140,9 @@ run_zsh() {
 }
 
 @test ".ashlet:error-code: extracts error code" {
-    run_zsh '.ashlet:error-code '"'"'{"request_id":1,"candidates":[],"error":{"code":"model_not_found","message":"missing"}}'"'"
+    run_zsh '.ashlet:error-code '"'"'{"request_id":1,"candidates":[],"error":{"code":"api_error","message":"request failed"}}'"'"
     [ "$status" -eq 0 ]
-    [ "$output" = "model_not_found" ]
+    [ "$output" = "api_error" ]
 }
 
 @test ".ashlet:error-code: returns empty when no error" {

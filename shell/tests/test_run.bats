@@ -46,11 +46,6 @@ setup() {
     [ "$status" -eq 0 ]
 }
 
-@test "_run.sh: checks for llama-server" {
-    run grep -q "llama-server" "$RUN_SCRIPT"
-    [ "$status" -eq 0 ]
-}
-
 @test "_run.sh: offers Homebrew install on macOS" {
     run grep -q "brew install" "$RUN_SCRIPT"
     [ "$status" -eq 0 ]

@@ -196,8 +196,7 @@ func (s *Server) handleConfigRequest(conn net.Conn, req *ashlet.ConfigRequest) {
 
 	case "reload":
 		// Respond immediately; reload engine in the background.
-		// Engine reload can block for tens of seconds waiting for
-		// llama-server health, so we must not block the client.
+		// Engine reload may block, so we must not block the client.
 		go s.reloadEngine()
 		cfg, _ := ashlet.LoadConfig()
 		resp.Config = cfg

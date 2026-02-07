@@ -64,7 +64,10 @@ zle -N .ashlet:next-candidate
 
 .ashlet:dismiss() {
     _ashlet_dismissed=1
+    _ashlet_private_mode=1
     .ashlet:clear-candidates
+    .ashlet:cleanup-async
+    .ashlet:show-private-mode
     zle -R
 }
 zle -N .ashlet:dismiss

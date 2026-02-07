@@ -4,10 +4,6 @@ ashletd
 *.test
 *.out
 
-# Model weights
-*.gguf
-*.bin
-
 # Unix socket files
 *.sock
 

@@ -83,6 +83,19 @@
     .ashlet:apply-highlights "$hint"
 }
 
+# Show private mode indicator below prompt
+.ashlet:show-private-mode() {
+    local msg='㊙ PRIVATE MODE ACTIVE - no input sent to AI'
+    POSTDISPLAY=$'\n'"$msg"
+
+    # Highlight the message in yellow/orange
+    region_highlight=("${(@)region_highlight:#*ashlet*}")
+    local -i base_offset=${#BUFFER}
+    local -i msg_start=$((base_offset + 1))  # +1 for newline
+    local -i msg_end=$((msg_start + ${#msg}))
+    region_highlight+=("${msg_start} ${msg_end} fg=208 ashlet")
+}
+
 # Apply region_highlight for colors
 .ashlet:apply-highlights() {
     local hint="$1"

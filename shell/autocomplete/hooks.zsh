@@ -17,6 +17,14 @@ zle -N .ashlet:line-init
 .ashlet:line-pre-redraw() {
     # Check if state has changed (buffer content OR cursor position)
     if ! .ashlet:same-state; then
+        # Private mode: don't fetch, don't clear dismissed, just update state + display
+        if (( _ashlet_private_mode )); then
+            .ashlet:save-state
+            .ashlet:show-private-mode
+            zle -R
+            return 0
+        fi
+
         # Clear dismissed state on any change
         if (( _ashlet_dismissed )); then
             _ashlet_dismissed=0
