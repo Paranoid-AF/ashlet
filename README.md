@@ -1,5 +1,7 @@
 # ashlet
 
+![Live Demo](https://github.com/Paranoid-AF/ashlet/raw/main/.assets/readme/demo.gif)
+
 AI-powered shell auto-completion for Zsh. Suggestions appear as you type, powered by any OpenAI-compatible API.
 
 ashlet runs a lightweight daemon (`ashletd`) that gathers context from your shell — working directory, command history, git status, project manifests — and sends it to an inference API. Candidates are streamed back and displayed inline below your prompt.
@@ -67,12 +69,12 @@ The daemon gathers rich context for each request:
 
 ## Keybindings
 
-| Key | Action |
-|-----|--------|
-| Tab | Accept the displayed suggestion |
-| Shift+Tab | Fall through to default Zsh completion |
-| Shift+Left / Shift+Right | Browse between candidates |
-| Escape | Dismiss suggestions until next input |
+| Key                      | Action                                 |
+| ------------------------ | -------------------------------------- |
+| Tab                      | Accept the displayed suggestion        |
+| Shift+Tab                | Fall through to default Zsh completion |
+| Shift+Left / Shift+Right | Browse between candidates              |
+| Escape                   | Dismiss suggestions until next input   |
 
 ## Configuration
 
@@ -105,10 +107,10 @@ Config lives at `~/.config/ashlet/config.json` (created on first run of `ashlet`
 
 ### API Key Resolution
 
-| Key | Priority |
-|-----|----------|
+| Key        | Priority                                                      |
+| ---------- | ------------------------------------------------------------- |
 | Generation | `$ASHLET_GENERATION_API_KEY` > `generation.api_key` in config |
-| Embedding | `$ASHLET_EMBEDDING_API_KEY` > `embedding.api_key` in config |
+| Embedding  | `$ASHLET_EMBEDDING_API_KEY` > `embedding.api_key` in config   |
 
 Embeddings are optional — when disabled, history ranking falls back to recency.
 
@@ -119,12 +121,12 @@ Embeddings are optional — when disabled, history ranking falls back to recency
 
 ### Shell Environment Variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `ASHLET_SOCKET` | auto | Override the Unix socket path |
-| `ASHLET_MAX_CANDIDATES` | `4` | Max suggestions per request |
-| `ASHLET_MIN_INPUT` | `2` | Minimum characters before requesting |
-| `ASHLET_DELAY` | `0.05` | Debounce delay (seconds) |
+| Variable                | Default | Description                          |
+| ----------------------- | ------- | ------------------------------------ |
+| `ASHLET_SOCKET`         | auto    | Override the Unix socket path        |
+| `ASHLET_MAX_CANDIDATES` | `4`     | Max suggestions per request          |
+| `ASHLET_MIN_INPUT`      | `2`     | Minimum characters before requesting |
+| `ASHLET_DELAY`          | `0.05`  | Debounce delay (seconds)             |
 
 ### Custom Prompt
 
