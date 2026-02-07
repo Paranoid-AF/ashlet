@@ -60,7 +60,7 @@ zle -N .ashlet:line-pre-redraw
 zle -N .ashlet:line-finish
 
 # =============================================================================
-# precmd Hook (runs outside ZLE — safe for external commands)
+# Regular Hooks (run outside ZLE — safe for external commands)
 # =============================================================================
 
 # Warm the directory context cache before each prompt.
@@ -68,6 +68,14 @@ zle -N .ashlet:line-finish
 # (socat). External process forks from ZLE widgets break terminal state.
 .ashlet:precmd-hook() {
     .ashlet:context-request "$PWD"
+}
+
+# Restore stderr before command execution.
+# Async fd handling in ZLE widgets (sysopen, process substitution, exec {fd}<&-)
+# can cause stderr to be redirected away from the terminal. This ensures commands
+# always have a working stderr.
+.ashlet:preexec-hook() {
+    [[ -t 2 ]] || exec 2>/dev/tty
 }
 
 # =============================================================================
@@ -80,7 +88,8 @@ zle -N .ashlet:line-finish
     add-zle-hook-widget line-pre-redraw .ashlet:line-pre-redraw
     add-zle-hook-widget line-finish    .ashlet:line-finish
 
-    # precmd is a regular zsh hook (not ZLE), safe for external commands
+    # precmd/preexec are regular zsh hooks (not ZLE), safe for external commands
     autoload -Uz add-zsh-hook
     add-zsh-hook precmd .ashlet:precmd-hook
+    add-zsh-hook preexec .ashlet:preexec-hook
 }
