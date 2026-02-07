@@ -3,7 +3,6 @@ package generate
 import (
 	"context"
 	"log/slog"
-	"sync"
 	"time"
 
 	ashlet "github.com/Paranoid-AF/ashlet"
@@ -19,9 +18,6 @@ type Info struct {
 // Gatherer collects context for completion requests.
 type Gatherer struct {
 	historyIndexer   *index.Indexer
-	indexOnce        sync.Once
-	indexDone        chan struct{}
-	indexErr         error
 	embeddingEnabled bool
 	noRawHistory     bool
 }
@@ -49,39 +45,19 @@ func NewGatherer(embedder *index.Embedder, cfg *ashlet.Config) *Gatherer {
 
 	g := &Gatherer{
 		historyIndexer:   index.NewIndexer(embedder, maxHistory, time.Duration(ttlMinutes)*time.Minute),
-		indexDone:        make(chan struct{}),
 		embeddingEnabled: embeddingEnabled,
 		noRawHistory:     noRawHistory,
 	}
 
-	// Eagerly start indexing when embedding is enabled so history is
-	// ready by the time the first completion request arrives. This is
-	// especially important after a config reload that enables embedding.
 	if embeddingEnabled {
-		g.startIndexing()
+		go g.historyIndexer.StartRefreshLoop()
 	}
 
 	return g
 }
 
-// startIndexing kicks off background history indexing exactly once.
-func (g *Gatherer) startIndexing() {
-	g.indexOnce.Do(func() {
-		go func() {
-			defer close(g.indexDone)
-			if err := g.historyIndexer.IndexHistory(); err != nil {
-				g.indexErr = err
-				slog.Error("background indexing error", "error", err)
-			}
-		}()
-	})
-}
-
 // Gather collects context based on the completion request.
 func (g *Gatherer) Gather(ctx context.Context, req *ashlet.Request) *Info {
-	// Ensure indexing has been triggered (no-op if already started)
-	g.startIndexing()
-
 	info := &Info{}
 
 	if g.noRawHistory && g.embeddingEnabled {
@@ -89,13 +65,9 @@ func (g *Gatherer) Gather(ctx context.Context, req *ashlet.Request) *Info {
 		timer := time.NewTimer(10 * time.Second)
 		defer timer.Stop()
 		select {
-		case <-g.indexDone:
-			if g.indexErr == nil {
-				if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 5); err == nil && len(cmds) > 0 {
-					info.RelevantCommands = cmds
-				}
-			} else {
-				slog.Warn("embedding indexing failed, no history context available")
+		case <-g.historyIndexer.InitDone():
+			if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 5); err == nil && len(cmds) > 0 {
+				info.RelevantCommands = cmds
 			}
 		case <-timer.C:
 			slog.Warn("embedding indexing timed out, no history context available")
@@ -111,7 +83,7 @@ func (g *Gatherer) Gather(ctx context.Context, req *ashlet.Request) *Info {
 	if g.embeddingEnabled {
 		// Non-blocking semantic search if indexing has completed
 		select {
-		case <-g.indexDone:
+		case <-g.historyIndexer.InitDone():
 			if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 5); err == nil && len(cmds) > 0 {
 				info.RelevantCommands = cmds
 			}

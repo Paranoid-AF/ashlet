@@ -167,6 +167,33 @@ func TestHNSWSearchIntegration(t *testing.T) {
 	}
 }
 
+func TestStartRefreshLoopStopsOnClose(t *testing.T) {
+	idx := NewIndexer(nil, 3000, time.Hour)
+	done := make(chan struct{})
+	go func() {
+		idx.StartRefreshLoop()
+		close(done)
+	}()
+	idx.Close()
+	select {
+	case <-done:
+		// goroutine exited as expected
+	case <-time.After(2 * time.Second):
+		t.Fatal("StartRefreshLoop did not exit after Close()")
+	}
+}
+
+func TestInitDoneClosedAfterStart(t *testing.T) {
+	idx := NewIndexer(nil, 3000, time.Hour)
+	idx.StartRefreshLoop() // nil embedder returns immediately
+	select {
+	case <-idx.InitDone():
+		// channel is closed as expected
+	default:
+		t.Fatal("InitDone() channel not closed after StartRefreshLoop() returned")
+	}
+}
+
 func TestHashCommandDeterministic(t *testing.T) {
 	h1 := hashCommand("git status")
 	h2 := hashCommand("git status")

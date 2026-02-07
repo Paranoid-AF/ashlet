@@ -138,8 +138,8 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 	info := e.gatherer.Gather(ctx, req)
 
 	slog.Debug("context gathered",
-		"recent_commands", info.RecentCommands,
-		"relevant_commands", info.RelevantCommands,
+		"recent_commands", strings.Join(info.RecentCommands, " | "),
+		"relevant_commands", strings.Join(info.RelevantCommands, " | "),
 	)
 
 	// Check for cancellation before expensive inference

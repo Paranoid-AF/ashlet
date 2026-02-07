@@ -24,10 +24,14 @@ type Indexer struct {
 	maxHistoryCommands int
 	ttl                time.Duration
 
-	mu          sync.RWMutex
-	graph       *hnsw.Graph[string]    // HNSW graph, keyed by command hash
-	commands    map[string]string      // hash -> redacted command text
-	lastIndexed time.Time
+	mu       sync.RWMutex
+	graph    *hnsw.Graph[string] // HNSW graph, keyed by command hash
+	commands map[string]string   // hash -> redacted command text
+
+	stopCh   chan struct{}
+	initDone chan struct{}
+	initOnce sync.Once
+	closeOnce sync.Once
 }
 
 // NewIndexer creates a new history indexer.
@@ -40,6 +44,8 @@ func NewIndexer(embedder *Embedder, maxHistoryCommands int, ttl time.Duration) *
 		ttl:                ttl,
 		graph:              hnsw.NewGraph[string](),
 		commands:           make(map[string]string),
+		stopCh:             make(chan struct{}),
+		initDone:           make(chan struct{}),
 	}
 }
 
@@ -121,9 +127,6 @@ func (idx *Indexer) IndexHistory() error {
 	idx.mu.RUnlock()
 
 	if len(toEmbed) == 0 {
-		idx.mu.Lock()
-		idx.lastIndexed = time.Now()
-		idx.mu.Unlock()
 		return nil
 	}
 
@@ -165,10 +168,6 @@ func (idx *Indexer) IndexHistory() error {
 		idx.mu.Unlock()
 	}
 
-	idx.mu.Lock()
-	idx.lastIndexed = time.Now()
-	idx.mu.Unlock()
-
 	return nil
 }
 
@@ -188,22 +187,43 @@ func (idx *Indexer) readTailCommands() []string {
 	return cmds
 }
 
+// StartRefreshLoop runs IndexHistory immediately, then re-indexes every TTL interval.
+// It blocks until Close() is called. If embedder is nil, it closes initDone and returns.
+func (idx *Indexer) StartRefreshLoop() {
+	if idx.embedder == nil {
+		idx.initOnce.Do(func() { close(idx.initDone) })
+		return
+	}
+
+	if err := idx.IndexHistory(); err != nil {
+		slog.Error("initial indexing error", "error", err)
+	}
+	idx.initOnce.Do(func() { close(idx.initDone) })
+
+	ticker := time.NewTicker(idx.ttl)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-idx.stopCh:
+			return
+		case <-ticker.C:
+			if err := idx.IndexHistory(); err != nil {
+				slog.Error("periodic re-indexing error", "error", err)
+			}
+		}
+	}
+}
+
+// InitDone returns a channel that is closed after the first IndexHistory call completes.
+func (idx *Indexer) InitDone() <-chan struct{} {
+	return idx.initDone
+}
+
 // SearchRelevant embeds the query and returns the topK most similar commands.
-// Re-indexes if TTL has expired.
 func (idx *Indexer) SearchRelevant(query string, topK int) ([]string, error) {
 	if idx.embedder == nil {
 		return nil, nil
-	}
-
-	// Check TTL and re-index if expired
-	idx.mu.RLock()
-	needsReindex := idx.lastIndexed.IsZero() || time.Since(idx.lastIndexed) > idx.ttl
-	idx.mu.RUnlock()
-
-	if needsReindex {
-		if err := idx.IndexHistory(); err != nil {
-			slog.Error("re-indexing error", "error", err)
-		}
 	}
 
 	queryVec, err := idx.embedder.Embed(RedactCommand(query))
@@ -226,8 +246,11 @@ func (idx *Indexer) SearchRelevant(query string, topK int) ([]string, error) {
 	return commands, nil
 }
 
-// Close releases resources held by the indexer.
+// Close stops the refresh loop and releases resources held by the indexer.
 func (idx *Indexer) Close() {
+	idx.closeOnce.Do(func() {
+		close(idx.stopCh)
+	})
 	if idx.embedder != nil {
 		idx.embedder.Close()
 	}
