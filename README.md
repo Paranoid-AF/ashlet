@@ -1,9 +1,8 @@
 # ashlet
 
-[![CI](https://github.com/Paranoid-AF/ashlet/actions/workflows/ci.yml/badge.svg)](https://github.com/Paranoid-AF/ashlet/actions/workflows/ci.yml)
-![Go version](https://img.shields.io/github/go-mod/go-version/Paranoid-AF/ashlet)
-![License](https://img.shields.io/badge/license-MIT-green)
-![GitHub stars](https://img.shields.io/github/stars/Paranoid-AF/ashlet)
+[![GitHub Release](https://img.shields.io/github/v/release/Paranoid-AF/ashlet)](https://github.com/Paranoid-AF/ashlet/releases/latest)
+[![License](https://img.shields.io/badge/license-MIT-green)](https://github.com/Paranoid-AF/ashlet/blob/master/LICENSE)
+[![GitHub stars](https://img.shields.io/github/stars/Paranoid-AF/ashlet)](https://github.com/Paranoid-AF/ashlet/stargazers)
 
 ![Live Demo](https://github.com/Paranoid-AF/ashlet/blob/master/.assets/readme/demo.gif?raw=true)
 
