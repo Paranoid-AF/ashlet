@@ -12,9 +12,18 @@ import (
 	"syscall"
 )
 
+// Version is set at build time via -ldflags.
+var Version = "dev"
+
 func main() {
+	showVersion := flag.Bool("version", false, "print version and exit")
 	verbose := flag.Bool("verbose", false, "log every request and response to stdout")
 	flag.Parse()
+
+	if *showVersion {
+		fmt.Println("ashletd", Version)
+		os.Exit(0)
+	}
 
 	level := slog.LevelInfo
 	if *verbose {
