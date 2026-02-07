@@ -1,11 +1,13 @@
-.PHONY: build test lint format clean
+.PHONY: build test lint format clean bootstrap
+
+bootstrap:
+	go mod download
 
 build:
-	$(MAKE) -C daemon build
-	$(MAKE) -C model build
+	go build -v -o ashletd ./serve
 
 test:
-	$(MAKE) -C daemon test
+	go test ./...
 	@if command -v bats >/dev/null 2>&1; then \
 		bats shell/tests/; \
 	else \
@@ -13,21 +15,25 @@ test:
 	fi
 
 lint:
-	$(MAKE) -C daemon lint
+	go vet ./...
+	@if command -v staticcheck >/dev/null 2>&1; then \
+		staticcheck ./...; \
+	else \
+		echo "staticcheck not found, skipping"; \
+	fi
 	@if command -v shellcheck >/dev/null 2>&1; then \
-		shellcheck --exclude=SC1091 shell/*.sh shell/*.bash; \
+		shellcheck _run.sh shell/_run.sh; \
 	else \
 		echo "shellcheck not found, skipping shell lint"; \
 	fi
 
 format:
-	$(MAKE) -C daemon format
+	gofmt -w .
 	@if command -v shfmt >/dev/null 2>&1; then \
-		shfmt -w -i 2 -bn -ci shell/*.sh shell/*.bash; \
+		shfmt -w -i 2 -bn -ci _run.sh shell/_run.sh; \
 	else \
 		echo "shfmt not found, skipping shell format"; \
 	fi
 
 clean:
-	$(MAKE) -C daemon clean
-	$(MAKE) -C model clean
+	rm -f ashletd

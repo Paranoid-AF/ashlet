@@ -1,17 +1,12 @@
 # Go
-daemon/ashletd
-daemon/bin/
+ashletd
 *.exe
 *.test
 *.out
 
 # Model weights
-model/models/
 *.gguf
 *.bin
-
-# llama.cpp build artifacts
-model/llama.cpp/
 
 # Unix socket files
 *.sock

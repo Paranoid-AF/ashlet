@@ -2,60 +2,118 @@
 
 ## Project Overview
 
-ashlet is a shell auto-completion system powered by local CPU-based AI. It runs entirely on-device using llama.cpp with GGUF models, optimized for Apple Silicon Metal.
+ashlet is a shell auto-completion system powered by AI. It uses OpenAI-compatible APIs (OpenRouter by default, or any provider like Ollama) for inference, with no local model files required.
 
 ## Architecture
 
-Three-component monorepo:
+Flat package layout:
 
-1. **shell/** — Shell client (Zsh/Bash integration). Captures input context, sends requests to daemon via Unix domain socket, applies completions to the input buffer.
-2. **daemon/** — Go daemon (`ashletd`). Listens on a Unix domain socket, gathers context (cwd, git state, command history), orchestrates model inference, returns completions.
-3. **model/** — Model layer. Wraps llama.cpp for embedding generation and text inference. Manages GGUF model files.
+1. **shell/** — Shell client (Zsh integration). Captures input context, sends requests to daemon via Unix domain socket, applies completions to the input buffer.
+2. **Root package (`ashlet`)** — Shared IPC types (`ashlet.go`) and configuration (`config.go`).
+3. **index/** — History indexing and embedding via API.
+4. **generate/** — Completion orchestration, context gathering, and inference via API.
+5. **serve/** — Daemon entry point and Unix socket server (`ashletd`).
+
+Dependency graph (no cycles): `root (ashlet) ← index ← generate ← serve (main)`
 
 ## IPC
 
 - **Mechanism**: Unix domain sockets (file-system based, bidirectional)
-- **Protocol**: JSON over socket (see `daemon/pkg/protocol/protocol.go`)
+- **Protocol**: JSON over socket (see `ashlet.go`)
 - **Socket path**: `$XDG_RUNTIME_DIR/ashlet.sock` or `/tmp/ashlet-$UID.sock`
+- **Response format**: `{"candidates": [...], "error": {"code": "...", "message": "..."}}`
+- **Error codes**: `not_configured` — API key missing, `api_error` — API request failed
+
+## Configuration
+
+Config file: `~/.config/ashlet/config.json` (created on-demand via `ashlet` command)
+Prompt file: `~/.config/ashlet/prompt.md` (created on-demand via `ashlet` command)
+
+### Config Schema (v2)
+
+```json
+{
+  "version": 2,
+  "generation": {
+    "base_url": "https://openrouter.ai/api/v1",
+    "api_key": "",
+    "api_type": "responses",
+    "model": "inception/mercury-coder",
+    "max_tokens": 120,
+    "temperature": 0.3
+  },
+  "embedding": {
+    "base_url": "",
+    "api_key": "",
+    "model": "openai/text-embedding-3-small",
+    "dimensions": 1536,
+    "ttl_minutes": 60,
+    "max_history_commands": 3000
+  },
+  "telemetry": {
+    "openrouter": true
+  }
+}
+```
+
+### API Key Resolution
+
+- **Generation**: `$ASHLET_GENERATION_API_KEY` env var > `generation.api_key` in config
+- **Embedding**: `$ASHLET_EMBEDDING_API_KEY` env var > `embedding.api_key` in config
+- Embedding is disabled when `base_url` or `api_key` is empty (graceful degradation to recency-only history)
+
+### API Types
+
+- `"responses"` (default): OpenAI Responses API format (`POST /responses`)
+- `"chat_completions"`: Chat Completions format (`POST /chat/completions`) for providers like Ollama
+
+### Telemetry
+
+When `telemetry.openrouter` is true (default), attribution headers are sent:
+- `X-Title: Ashlet - auto complete your shell commands`
+- `HTTP-Referer: https://github.com/Paranoid-AF/ashlet`
 
 ## Build Commands
 
 ```bash
-# Top-level (builds everything)
+# Bootstrap (download Go deps)
+make bootstrap
+
+# Top-level
 make build
 make test
 make lint
 make clean
-
-# Per-component
-cd daemon && make build
-cd model && make build
 ```
 
 ## Test Commands
 
 ```bash
-make test              # All tests
-cd daemon && make test # Go tests
-cd shell && bats tests/ # Shell tests (requires bats-core)
+make test                # All tests (Go + shell)
+go test ./...            # Go tests only
+cd shell && bats tests/  # Shell tests (requires bats-core)
 ```
 
 ## Go Module
 
-- **Module path**: `github.com/Paranoid-AF/ashlet`
-- **Go source**: `daemon/` directory
-- **Key packages**:
-  - `cmd/ashletd` — daemon entry point
-  - `internal/ipc` — Unix socket server
-  - `internal/history` — shell history indexer
-  - `internal/context` — context gathering (git, cwd, recent commands)
-  - `internal/completion` — completion orchestration
-  - `pkg/protocol` — shared request/response types
+Single Go module at project root:
+
+- **Module**: `github.com/Paranoid-AF/ashlet`
+
+### Packages
+
+- `ashlet.go` — shared IPC request/response types
+- `config.go` — configuration types and path resolution
+- `serve/` — daemon entry point and Unix socket server
+- `generate/` — completion orchestration, context gathering, inference via API
+- `index/` — history indexing, embedding via API
 
 ## Design Constraints
 
-- All inference runs locally on CPU/Metal — no network calls to external AI services
+- Inference via OpenAI-compatible APIs (no local model files)
 - File-based IPC only (Unix domain sockets, no TCP)
 - Shell integration must handle cursor position manipulation correctly
-- Must support both Zsh and Bash
-- Model weights are not checked into git (downloaded via setup script)
+- Shell integration is Zsh-only (requires Zsh 5.3+)
+- Config/prompt files created on-demand via `ashlet` command only
+- Embeddings stored in-memory with TTL (no disk persistence)
+- `jq` is a required dependency for shell integrations (no grep fallback)
