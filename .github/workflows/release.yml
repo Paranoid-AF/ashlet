@@ -96,10 +96,11 @@ jobs:
           # Strip leading 'v' from tag for version field
           ver="${VERSION#v}"
           sed -i "s/version \".*\"/version \"${ver}\"/" ashlet.rb
-          sed -i "s/PLACEHOLDER_DARWIN_AMD64/${SHA_DARWIN_AMD64}/" ashlet.rb
-          sed -i "s/PLACEHOLDER_DARWIN_ARM64/${SHA_DARWIN_ARM64}/" ashlet.rb
-          sed -i "s/PLACEHOLDER_LINUX_AMD64/${SHA_LINUX_AMD64}/" ashlet.rb
-          sed -i "s/PLACEHOLDER_LINUX_ARM64/${SHA_LINUX_ARM64}/" ashlet.rb
+          # Replace sha256 on the line after each platform-specific URL
+          sed -i "/ashlet-darwin-amd64\.tar\.gz/{ n; s/sha256 \"[a-f0-9]\{64\}\"/sha256 \"${SHA_DARWIN_AMD64}\"/; }" ashlet.rb
+          sed -i "/ashlet-darwin-arm64\.tar\.gz/{ n; s/sha256 \"[a-f0-9]\{64\}\"/sha256 \"${SHA_DARWIN_ARM64}\"/; }" ashlet.rb
+          sed -i "/ashlet-linux-amd64\.tar\.gz/{ n; s/sha256 \"[a-f0-9]\{64\}\"/sha256 \"${SHA_LINUX_AMD64}\"/; }" ashlet.rb
+          sed -i "/ashlet-linux-arm64\.tar\.gz/{ n; s/sha256 \"[a-f0-9]\{64\}\"/sha256 \"${SHA_LINUX_ARM64}\"/; }" ashlet.rb
 
       - name: Commit and push
         run: |
