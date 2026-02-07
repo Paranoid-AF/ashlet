@@ -137,6 +137,11 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 
 	info := e.gatherer.Gather(ctx, req)
 
+	slog.Debug("context gathered",
+		"recent_commands", info.RecentCommands,
+		"relevant_commands", info.RelevantCommands,
+	)
+
 	// Check for cancellation before expensive inference
 	if ctx.Err() != nil {
 		return &ashlet.Response{Candidates: []ashlet.Candidate{}}
@@ -151,6 +156,8 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 
 	systemPrompt := e.buildSystemPrompt(maxCandidates)
 	userMessage := e.buildUserMessage(req, info, dirCtx)
+
+	slog.Debug("prompt", "system", systemPrompt, "user", userMessage)
 
 	output, err := e.generator.Generate(ctx, systemPrompt, userMessage)
 	if err != nil {
