@@ -41,7 +41,7 @@ jobs:
           dir="ashlet-${{ matrix.goos }}-${{ matrix.goarch }}"
           mkdir "$dir"
           mv ashletd "$dir/"
-          rsync -a --exclude='tests/' --exclude='README.md' --exclude='SPEC.md' shell/ "$dir/shell/"
+          rsync -a --exclude='tests/' --exclude='README.md' --exclude='SPEC.md' --exclude='_run.sh' shell/ "$dir/shell/"
           tar -czf "$dir.tar.gz" "$dir"
 
       - uses: actions/upload-artifact@v4

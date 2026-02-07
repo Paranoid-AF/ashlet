@@ -129,6 +129,12 @@ Runs `make build` then `exec ./ashletd`. Stays in the foreground so you see logs
 
 Checks for dependencies (`zsh`, `socat`, `jq`), then launches an interactive zsh session with ashlet pre-loaded via a temporary `ZDOTDIR`. Type commands to see completions.
 
+## Homebrew Tap
+
+- **Tap repo**: `https://github.com/Paranoid-AF/homebrew-tap.git` (local: `~/Repositories/homebrew-tap`)
+- **Formula file**: `ashlet.rb`
+- `shell/_run.sh` is a dev-only debug launcher and is excluded at the Package stage in `release.yml` (rsync `--exclude`)
+
 ## Design Constraints
 
 - Inference via OpenAI-compatible APIs (no local model files)
