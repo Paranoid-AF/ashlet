@@ -110,7 +110,7 @@ ashlet sends context to your configured API provider to generate completions.
     - When embeddings are disabled, it may fall back to sending a **recent commands** window.
 - **History redaction**: In shell history only, environment variable references (`$SECRET`, `${API_KEY}`) and assignments (`TOKEN=abc`) are redacted before being sent. Safe variables like `$HOME`, `$PATH`, and `$PWD` are preserved.
 - **IMPORTANT: Your current input is not redacted.** If you are typing sensitive content, press `Escape` to enable **PRIVATE MODE** until the next prompt (`Enter` / `Ctrl`+`C`). You will see `㊙ PRIVATE MODE ACTIVE - no input sent to AI` below your prompt.
-  [A screenshot of how Private Mode enabled looks like](https://github.com/Paranoid-AF/ashlet/blob/master/.assets/readme/private-mode.png?raw=true)
+  ![A screenshot of how Private Mode enabled looks like](https://github.com/Paranoid-AF/ashlet/blob/master/.assets/readme/private-mode.png?raw=true)
 - **Local-only IPC**: The shell client and daemon communicate over a Unix domain socket. Nothing is sent over the network except API calls to your configured provider.
 - **Telemetry**: When `telemetry.openrouter` is `true` (default), OpenRouter attribution headers are sent. Set it to `false` to disable.
 
