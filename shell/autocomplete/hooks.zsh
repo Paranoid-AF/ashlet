@@ -70,11 +70,12 @@ zle -N .ashlet:line-finish
     .ashlet:context-request "$PWD"
 }
 
-# Restore stderr before command execution.
+# Restore stdout/stderr before command execution.
 # Async fd handling in ZLE widgets (sysopen, process substitution, exec {fd}<&-)
-# can cause stderr to be redirected away from the terminal. This ensures commands
-# always have a working stderr.
+# can cause standard fds to be redirected away from the terminal. This ensures
+# commands always have working stdout and stderr.
 .ashlet:preexec-hook() {
+    [[ -t 1 ]] || exec 1>/dev/tty
     [[ -t 2 ]] || exec 2>/dev/tty
 }
 

@@ -137,7 +137,8 @@ source "${basedir}/config.zsh" || return 1
 # Main entry point - the 'ashlet' command
 ashlet() {
     emulate -L zsh
-    # Restore stderr if it was closed/redirected (e.g. by async fd handling)
+    # Restore stdout/stderr if redirected (e.g. by async fd handling)
+    [[ -t 1 ]] || exec 1>/dev/tty
     [[ -t 2 ]] || exec 2>/dev/tty
     case "$1" in
         --config|-c)
