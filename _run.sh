@@ -24,4 +24,14 @@ if ! make build; then
 fi
 
 echo "Starting ashletd..."
-exec ./ashletd $VERBOSE
+
+# Stop running service for debugging, and restart it on exit
+if command -v brew >/dev/null 2>&1; then
+  brew services stop ashlet >/dev/null 2>&1 &
+  BREW_PID=$!
+  sleep 2 && kill $BREW_PID 2>/dev/null &
+  wait $BREW_PID 2>/dev/null || true
+  trap 'echo "Starting ashlet service..."; brew services start ashlet >/dev/null 2>&1' EXIT
+fi
+
+./ashletd $VERBOSE
