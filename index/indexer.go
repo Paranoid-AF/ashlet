@@ -6,51 +6,40 @@ import (
 	"fmt"
 	"io"
 	"log/slog"
-	"math"
 	"os"
 	"path/filepath"
 	"strings"
 	"sync"
 	"time"
+
+	"github.com/coder/hnsw"
 )
 
 const indexBatchSize = 32
-
-// SearchResult holds a matching command and its similarity score.
-type SearchResult struct {
-	Command    string
-	Similarity float64
-}
-
-// vectorEntry stores an embedded command and its vector.
-type vectorEntry struct {
-	Command string
-	Vector  []float32
-}
 
 // Indexer reads and indexes shell history files using in-memory TTL cache.
 type Indexer struct {
 	historyPath        string // single most-recently-modified history file
 	embedder           *Embedder
-	dimensions         int
 	maxHistoryCommands int
 	ttl                time.Duration
 
 	mu          sync.RWMutex
-	entries     map[string]vectorEntry // hash -> entry
+	graph       *hnsw.Graph[string]    // HNSW graph, keyed by command hash
+	commands    map[string]string      // hash -> redacted command text
 	lastIndexed time.Time
 }
 
 // NewIndexer creates a new history indexer.
 // If embedder is nil, semantic features are disabled (RecentCommands still works).
-func NewIndexer(embedder *Embedder, dimensions, maxHistoryCommands int, ttl time.Duration) *Indexer {
+func NewIndexer(embedder *Embedder, maxHistoryCommands int, ttl time.Duration) *Indexer {
 	return &Indexer{
 		historyPath:        resolveHistoryPath(),
 		embedder:           embedder,
-		dimensions:         dimensions,
 		maxHistoryCommands: maxHistoryCommands,
 		ttl:                ttl,
-		entries:            make(map[string]vectorEntry),
+		graph:              hnsw.NewGraph[string](),
+		commands:           make(map[string]string),
 	}
 }
 
@@ -114,39 +103,66 @@ func (idx *Indexer) IndexHistory() error {
 		return nil
 	}
 
-	// Batch embed
-	var batch []struct {
+	// Collect new commands that need embedding
+	idx.mu.RLock()
+	var toEmbed []struct {
 		hash string
 		cmd  string
 	}
-
 	for _, cmd := range cmds {
 		hash := hashCommand(cmd)
-		idx.mu.RLock()
-		_, exists := idx.entries[hash]
-		idx.mu.RUnlock()
-		if exists {
+		if _, exists := idx.graph.Lookup(hash); !exists {
+			toEmbed = append(toEmbed, struct {
+				hash string
+				cmd  string
+			}{hash, cmd})
+		}
+	}
+	idx.mu.RUnlock()
+
+	if len(toEmbed) == 0 {
+		idx.mu.Lock()
+		idx.lastIndexed = time.Now()
+		idx.mu.Unlock()
+		return nil
+	}
+
+	// Embed in batches via API, accumulating results locally
+	var allNodes []hnsw.Node[string]
+	allCommands := make(map[string]string, len(toEmbed))
+
+	for i := 0; i < len(toEmbed); i += indexBatchSize {
+		end := i + indexBatchSize
+		if end > len(toEmbed) {
+			end = len(toEmbed)
+		}
+		batch := toEmbed[i:end]
+
+		redacted := make([]string, len(batch))
+		for j, b := range batch {
+			redacted[j] = RedactCommand(b.cmd)
+		}
+
+		vectors, err := idx.embedder.EmbedBatch(redacted)
+		if err != nil {
+			slog.Error("batch embed error", "error", err)
 			continue
 		}
 
-		batch = append(batch, struct {
-			hash string
-			cmd  string
-		}{hash, cmd})
-
-		if len(batch) >= indexBatchSize {
-			if err := idx.embedBatch(batch); err != nil {
-				slog.Error("batch embed error", "error", err)
-			}
-			batch = batch[:0]
+		for j, b := range batch {
+			allNodes = append(allNodes, hnsw.MakeNode(b.hash, vectors[j]))
+			allCommands[b.hash] = redacted[j]
 		}
 	}
 
-	// Flush remaining batch
-	if len(batch) > 0 {
-		if err := idx.embedBatch(batch); err != nil {
-			slog.Error("batch embed error", "error", err)
+	// Single graph insertion under one write lock
+	if len(allNodes) > 0 {
+		idx.mu.Lock()
+		idx.graph.Add(allNodes...)
+		for k, v := range allCommands {
+			idx.commands[k] = v
 		}
+		idx.mu.Unlock()
 	}
 
 	idx.mu.Lock()
@@ -170,32 +186,6 @@ func (idx *Indexer) readTailCommands() []string {
 		cmds = append(cmds, cmd)
 	}
 	return cmds
-}
-
-func (idx *Indexer) embedBatch(batch []struct {
-	hash string
-	cmd  string
-}) error {
-	// Redact commands before sending to embedding API
-	redacted := make([]string, len(batch))
-	for i, b := range batch {
-		redacted[i] = RedactCommand(b.cmd)
-	}
-
-	vectors, err := idx.embedder.EmbedBatch(redacted)
-	if err != nil {
-		return err
-	}
-
-	idx.mu.Lock()
-	defer idx.mu.Unlock()
-	for i, b := range batch {
-		idx.entries[b.hash] = vectorEntry{
-			Command: redacted[i],
-			Vector:  vectors[i],
-		}
-	}
-	return nil
 }
 
 // SearchRelevant embeds the query and returns the topK most similar commands.
@@ -224,43 +214,14 @@ func (idx *Indexer) SearchRelevant(query string, topK int) ([]string, error) {
 	idx.mu.RLock()
 	defer idx.mu.RUnlock()
 
-	if len(idx.entries) == 0 || topK <= 0 {
+	if idx.graph.Len() == 0 || topK <= 0 {
 		return nil, nil
 	}
 
-	type scored struct {
-		command    string
-		similarity float64
-	}
-
-	queryNorm := vecNorm(queryVec)
-	if queryNorm == 0 {
-		return nil, nil
-	}
-
-	results := make([]scored, 0, len(idx.entries))
-	for _, entry := range idx.entries {
-		sim := cosineSimilarity(queryVec, entry.Vector, queryNorm)
-		results = append(results, scored{command: entry.Command, similarity: sim})
-	}
-
-	// Simple selection sort for topK
-	if topK > len(results) {
-		topK = len(results)
-	}
-	for i := 0; i < topK; i++ {
-		best := i
-		for j := i + 1; j < len(results); j++ {
-			if results[j].similarity > results[best].similarity {
-				best = j
-			}
-		}
-		results[i], results[best] = results[best], results[i]
-	}
-
-	commands := make([]string, topK)
-	for i := 0; i < topK; i++ {
-		commands[i] = results[i].command
+	neighbors := idx.graph.Search(queryVec, topK)
+	commands := make([]string, len(neighbors))
+	for i, n := range neighbors {
+		commands[i] = idx.commands[n.Key]
 	}
 	return commands, nil
 }
@@ -337,29 +298,4 @@ func readLastLines(path string, n int) []string {
 		lines = lines[len(lines)-n:]
 	}
 	return lines
-}
-
-func vecNorm(v []float32) float64 {
-	var sum float64
-	for _, x := range v {
-		sum += float64(x) * float64(x)
-	}
-	return math.Sqrt(sum)
-}
-
-func cosineSimilarity(a, b []float32, aNorm float64) float64 {
-	if len(a) != len(b) {
-		return 0
-	}
-	var dot float64
-	var bSumSq float64
-	for i := range a {
-		dot += float64(a[i]) * float64(b[i])
-		bSumSq += float64(b[i]) * float64(b[i])
-	}
-	bNorm := math.Sqrt(bSumSq)
-	if aNorm == 0 || bNorm == 0 {
-		return 0
-	}
-	return dot / (aNorm * bNorm)
 }

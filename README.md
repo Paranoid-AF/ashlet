@@ -10,6 +10,10 @@ AI-powered shell auto-completion for Zsh. Suggestions appear as you type, powere
 
 ashlet runs a lightweight daemon (`ashletd`) that gathers context from your shell — working directory, command history, git status, project manifests — and sends it to an inference API. Candidates are streamed back and displayed inline below your prompt.
 
+```
+Zsh Shell <--> ashlet.zsh <--> (Unix socket) <--> ashletd <--> API provider
+```
+
 ## Table of Contents
 
 - [Quickstart](#quickstart)

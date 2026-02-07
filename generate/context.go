@@ -29,20 +29,16 @@ type Gatherer struct {
 // NewGatherer creates a new context gatherer.
 // embedder may be nil to disable semantic features.
 func NewGatherer(embedder *index.Embedder, cfg *ashlet.Config) *Gatherer {
-	var dimensions, maxHistory int
+	var maxHistory int
 	var ttlMinutes int
 	var noRawHistory bool
 	embeddingEnabled := embedder != nil
 	if cfg != nil {
-		dimensions = cfg.Embedding.Dimensions
 		maxHistory = cfg.Embedding.MaxHistoryCommands
 		ttlMinutes = cfg.Embedding.TTLMinutes
 		if cfg.Generation.NoRawHistory != nil {
 			noRawHistory = *cfg.Generation.NoRawHistory
 		}
-	}
-	if dimensions == 0 {
-		dimensions = 1536
 	}
 	if maxHistory == 0 {
 		maxHistory = 3000
@@ -52,7 +48,7 @@ func NewGatherer(embedder *index.Embedder, cfg *ashlet.Config) *Gatherer {
 	}
 
 	g := &Gatherer{
-		historyIndexer:   index.NewIndexer(embedder, dimensions, maxHistory, time.Duration(ttlMinutes)*time.Minute),
+		historyIndexer:   index.NewIndexer(embedder, maxHistory, time.Duration(ttlMinutes)*time.Minute),
 		indexDone:        make(chan struct{}),
 		embeddingEnabled: embeddingEnabled,
 		noRawHistory:     noRawHistory,

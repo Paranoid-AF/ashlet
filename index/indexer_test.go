@@ -5,6 +5,8 @@ import (
 	"path/filepath"
 	"testing"
 	"time"
+
+	"github.com/coder/hnsw"
 )
 
 func TestParseHistoryLineZsh(t *testing.T) {
@@ -52,7 +54,8 @@ func TestRecentCommandsReadsBashHistory(t *testing.T) {
 
 	idx := &Indexer{
 		historyPath: bashHist,
-		entries:     make(map[string]vectorEntry),
+		graph:       hnsw.NewGraph[string](),
+		commands:    make(map[string]string),
 	}
 
 	cmds := idx.RecentCommands(3)
@@ -70,7 +73,8 @@ func TestRecentCommandsReadsBashHistory(t *testing.T) {
 func TestRecentCommandsMissingFile(t *testing.T) {
 	idx := &Indexer{
 		historyPath: "/nonexistent/history",
-		entries:     make(map[string]vectorEntry),
+		graph:       hnsw.NewGraph[string](),
+		commands:    make(map[string]string),
 	}
 	cmds := idx.RecentCommands(5)
 	if len(cmds) != 0 {
@@ -79,7 +83,7 @@ func TestRecentCommandsMissingFile(t *testing.T) {
 }
 
 func TestNewIndexerNilEmbedder(t *testing.T) {
-	idx := NewIndexer(nil, 1536, 3000, time.Hour)
+	idx := NewIndexer(nil, 3000, time.Hour)
 	// IndexHistory should be a no-op with nil embedder
 	if err := idx.IndexHistory(); err != nil {
 		t.Fatalf("unexpected error with nil embedder: %v", err)
@@ -87,7 +91,7 @@ func TestNewIndexerNilEmbedder(t *testing.T) {
 }
 
 func TestSearchRelevantNilEmbedder(t *testing.T) {
-	idx := NewIndexer(nil, 1536, 3000, time.Hour)
+	idx := NewIndexer(nil, 3000, time.Hour)
 	cmds, err := idx.SearchRelevant("test", 5)
 	if err != nil {
 		t.Fatalf("unexpected error: %v", err)
@@ -104,9 +108,62 @@ func TestNewIndexerUsesHISTFILE(t *testing.T) {
 		t.Fatal(err)
 	}
 	t.Setenv("HISTFILE", histFile)
-	idx := NewIndexer(nil, 1536, 3000, time.Hour)
+	idx := NewIndexer(nil, 3000, time.Hour)
 	if idx.historyPath != histFile {
 		t.Errorf("expected historyPath %s, got %s", histFile, idx.historyPath)
+	}
+}
+
+func TestHNSWSearchIntegration(t *testing.T) {
+	g := hnsw.NewGraph[string]()
+	g.Add(
+		hnsw.MakeNode("a", []float32{1, 0, 0}),
+		hnsw.MakeNode("b", []float32{0.9, 0.1, 0}),
+		hnsw.MakeNode("c", []float32{0, 1, 0}),
+		hnsw.MakeNode("d", []float32{0, 0, 1}),
+	)
+
+	if g.Len() != 4 {
+		t.Fatalf("expected 4 nodes, got %d", g.Len())
+	}
+
+	// Query near "a" — should return "a" first, then "b"
+	results := g.Search([]float32{1, 0, 0}, 2)
+	if len(results) != 2 {
+		t.Fatalf("expected 2 results, got %d", len(results))
+	}
+	if results[0].Key != "a" {
+		t.Errorf("expected nearest key 'a', got %q", results[0].Key)
+	}
+	if results[1].Key != "b" {
+		t.Errorf("expected second nearest key 'b', got %q", results[1].Key)
+	}
+
+	// Verify Lookup works
+	vec, ok := g.Lookup("a")
+	if !ok {
+		t.Fatal("expected Lookup('a') to succeed")
+	}
+	if len(vec) != 3 || vec[0] != 1 {
+		t.Errorf("unexpected vector for 'a': %v", vec)
+	}
+
+	_, ok = g.Lookup("missing")
+	if ok {
+		t.Error("expected Lookup('missing') to return false")
+	}
+
+	// Verify command map integration
+	commands := map[string]string{
+		"a": "ls -la",
+		"b": "ls",
+		"c": "git status",
+		"d": "docker ps",
+	}
+	for _, n := range results {
+		if commands[n.Key] == "" {
+			t.Errorf("missing command for key %q", n.Key)
+		}
 	}
 }
 
