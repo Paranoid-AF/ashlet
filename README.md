@@ -1,29 +1,56 @@
 # ashlet
 
+[![CI](https://github.com/Paranoid-AF/ashlet/actions/workflows/ci.yml/badge.svg)](https://github.com/Paranoid-AF/ashlet/actions/workflows/ci.yml)
+![Go Version](https://img.shields.io/github/go-mod/go-version/Paranoid-AF/ashlet)
+![License](https://img.shields.io/github/license/Paranoid-AF/ashlet)
+
 ![Live Demo](https://github.com/Paranoid-AF/ashlet/blob/master/.assets/readme/demo.gif?raw=true)
 
 AI-powered shell auto-completion for Zsh. Suggestions appear as you type, powered by any OpenAI-compatible API.
 
 ashlet runs a lightweight daemon (`ashletd`) that gathers context from your shell — working directory, command history, git status, project manifests — and sends it to an inference API. Candidates are streamed back and displayed inline below your prompt.
 
-## Install
+## Table of Contents
 
-### Homebrew
+- [Quickstart](#quickstart)
+- [Requirements](#requirements)
+- [Build from Source](#build-from-source)
+- [How It Works](#how-it-works)
+- [Privacy](#privacy)
+- [Keybindings](#keybindings)
+- [Troubleshooting](#troubleshooting)
+- [Configuration](#configuration)
+- [Architecture](#architecture)
+- [Development](#development)
+- [Why Name It `ashlet`?](#why-name-it-ashlet)
+- [License](#license)
+
+## Quickstart
 
 ```bash
+# 1) Install
 brew install paranoid-af/tap/ashlet
-```
 
-Add to `~/.zshrc`:
+# 2) Enable in Zsh
+echo 'source $(brew --prefix)/share/ashlet/ashlet.zsh' >> ~/.zshrc
+exec zsh
 
-```bash
-source $(brew --prefix)/share/ashlet/ashlet.zsh
-```
-
-Start the daemon (runs automatically on login):
-
-```bash
+# 3) Start the daemon
 brew services start ashlet
+
+# 4) Configure an API key (recommended)
+ashlet   # creates ~/.config/ashlet/config.json and ~/.config/ashlet/prompt.md
+
+# If you are running ./ashletd manually (not via brew services), you can also:
+# export ASHLET_GENERATION_API_KEY="your-openrouter-key"
+```
+
+Type a command, wait for a suggestion, then press `Tab` to accept.
+
+Try it:
+
+```bash
+git st
 ```
 
 ## Requirements
@@ -67,34 +94,54 @@ The daemon gathers rich context for each request:
 - **Git info** — repo root, staged files, recent commits, manifests (package.json, Makefile, etc.)
 - **Cursor position** — understands partial tokens
 
-### Privacy Concerns
+## Privacy
 
-Since ashlet sends context to external APIs, it takes steps to limit what leaves your machine:
+ashlet sends context to your configured API provider to generate completions.
 
-- **Environment variable redaction** — Variable references (`$SECRET`, `${API_KEY}`) and assignments (`TOKEN=abc`) in shell history are redacted before being sent to any API. Safe variables like `$HOME`, `$PATH`, and `$PWD` are preserved. Redaction uses AST-based parsing with a regex fallback.
-- **Your current input is never redacted** — The command you are actively typing is sent as-is to produce accurate completions.
-  - If you are typing sensitive content, you could enable PRIVATE MODE by presssing `Escape`.
-  - When PRIVATE MODE activates, you will see `㊙ PRIVATE MODE ACTIVE - no input sent to AI` displayed below your input. No any further input will be sent to your API provider.
-  - PRIVATE MODE persists until you press `Enter` or `Ctrl`+`C`.
-- **No raw history mode** — When `no_raw_history` is enabled (default) and embeddings are configured, only semantically relevant commands are sent to the generation API — not your full recent history.
-- **Local-only IPC** — The shell client and daemon communicate over a Unix domain socket. Nothing is sent over the network except API calls to your configured provider.
+- **What gets sent**:
+  - **The line you are typing** (and cursor position)
+  - **Local context** like directory info and (optionally) git metadata
+  - **History context**:
+    - With embeddings enabled and `generation.no_raw_history: true` (default), ashlet sends **only semantically relevant** history commands (not a raw recent-history window).
+    - When embeddings are disabled, it may fall back to sending a **recent commands** window.
+- **History redaction**: In shell history only, environment variable references (`$SECRET`, `${API_KEY}`) and assignments (`TOKEN=abc`) are redacted before being sent. Safe variables like `$HOME`, `$PATH`, and `$PWD` are preserved.
+- **IMPORTANT: Your current input is not redacted.** If you are typing sensitive content, press `Escape` to enable **PRIVATE MODE** until the next prompt (`Enter` / `Ctrl`+`C`). You will see `㊙ PRIVATE MODE ACTIVE - no input sent to AI` below your prompt.
+- **Local-only IPC**: The shell client and daemon communicate over a Unix domain socket. Nothing is sent over the network except API calls to your configured provider.
+- **Telemetry**: When `telemetry.openrouter` is `true` (default), OpenRouter attribution headers are sent. Set it to `false` to disable.
 
 ## Keybindings
 
-| Key                              | Action                                 |
-| -------------------------------- | -------------------------------------- |
-| `Tab`                            | Accept the displayed suggestion        |
-| `Shift`+`Tab`                    | Fall through to default Zsh completion |
-| `Shift`+`Left` / `Shift`+`Right` | Browse between candidates              |
-| `Escape`                         | Dismiss suggestions until next input   |
+| Key                              | Action                                                     |
+| -------------------------------- | ---------------------------------------------------------- |
+| `Tab`                            | Accept the displayed suggestion                            |
+| `Shift`+`Tab`                    | Fall through to default Zsh completion                     |
+| `Shift`+`Left` / `Shift`+`Right` | Browse between candidates                                  |
+| `Escape`                         | Enable PRIVATE MODE (stop sending input) until next prompt |
+
+## Troubleshooting
+
+- **No suggestions appear**
+  - Ensure the daemon is running: `brew services list` (or start it with `brew services start ashlet`)
+  - If you built from source, run `./ashletd` and watch logs for errors
+- **`Tab` doesn’t accept the suggestion**
+  - Make sure `ashlet.zsh` is sourced in your `~/.zshrc`, then restart your shell
+  - If `Tab` is bound by another plugin, you can still access regular Zsh completion via `Shift`+`Tab`
+- **Missing dependencies (`jq` / `socat`)**
+  - Install them: `brew install jq socat`
+- **Socket / connection problems**
+  - If you override the socket path, confirm `ASHLET_SOCKET` points to the same location for both shell + daemon
+- **API auth / request failures**
+  - Set `ASHLET_GENERATION_API_KEY` (or run `ashlet` to create/edit `~/.config/ashlet/config.json`)
+- **Accidentally sending something sensitive**
+  - Use `Escape` to enable PRIVATE MODE before typing secrets, prventing sending requests (current input is not redacted in requests)
 
 ## Configuration
 
-After enabling it in your shell, you could run command `ashlet` to generate your custom configuration files.
+After enabling it in your shell, you can run `ashlet` to generate your configuration files.
 
 This includes:
 
-- `config.json`: General configurations, such as API base URL, your API key and LLM model name.
+- `config.json`: General configuration, such as API base URL, your API key, and the model name.
 - `prompt.md`: Your custom prompt (Go `text/template`). See the default prompt at: [DEFAULT PROMPT](https://github.com/Paranoid-AF/ashlet/blob/master/default/default_prompt.md).
 
 ### config.json
@@ -103,14 +150,15 @@ Config lives at `~/.config/ashlet/config.json`:
 
 ```json
 {
-  "version": 2,
+  "version": 1,
   "generation": {
     "base_url": "https://openrouter.ai/api/v1",
     "api_key": "",
     "api_type": "responses",
     "model": "mistralai/codestral-2508",
     "max_tokens": 120,
-    "temperature": 0.3
+    "temperature": 0.3,
+    "no_raw_history": true
   },
   "embedding": {
     "base_url": "https://openrouter.ai/api/v1",
@@ -126,7 +174,7 @@ Config lives at `~/.config/ashlet/config.json`:
 }
 ```
 
-Embeddings are optional — when disabled, history ranking falls back to recency.
+Embeddings are optional. When disabled, ashlet uses recency-only history (no semantic search).
 
 #### API Types
 
@@ -204,7 +252,7 @@ This launches an interactive zsh session with ashlet pre-loaded. Type commands t
 
 ## Why Name It `ashlet`?
 
-**A**I/**A**utocomplete **Sh**ell Script**let**, also a reference to `Ashley` - making it a bit more _anthropomorphic_, XD.
+**A**I/**A**utocomplete **Sh**ell Script**let** (and a reference to `Ashley`, to make it a bit more _anthropomorphic_).
 
 ## License
 
