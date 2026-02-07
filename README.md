@@ -1,6 +1,6 @@
 # ashlet
 
-![Live Demo](https://github.com/Paranoid-AF/ashlet/raw/main/.assets/readme/demo.gif)
+![Live Demo](https://github.com/Paranoid-AF/ashlet/blob/master/.assets/readme/demo.gif?raw=true)
 
 AI-powered shell auto-completion for Zsh. Suggestions appear as you type, powered by any OpenAI-compatible API.
 
