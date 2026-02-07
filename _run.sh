@@ -25,15 +25,25 @@ fi
 
 echo "Starting ashletd..."
 
-# Stop running service for debugging, and restart it on exit
-if command -v brew >/dev/null 2>&1 \
-  && [ "$(brew services list 2>/dev/null | awk '/^ashlet/ { print $2 }')" != "none" ]; then
-  echo "Stopping enabled ashlet background service..."
+# Check if ashletd is running as a brew service before stopping
+WAS_RUNNING_BY_BREW=false
+if command -v brew >/dev/null 2>&1 && pgrep -f '/opt/homebrew/.*ashletd' >/dev/null 2>&1; then
+  WAS_RUNNING_BY_BREW=true
+fi
+
+# Gracefully stop the brew service; fall back to pkill if it hangs.
+if [ "$WAS_RUNNING_BY_BREW" = true ]; then
   brew services stop ashlet >/dev/null 2>&1 &
   BREW_PID=$!
-  sleep 2 && kill $BREW_PID 2>/dev/null &
+  ( sleep 3 && kill $BREW_PID 2>/dev/null && pkill -f ashletd 2>/dev/null ) &
   wait $BREW_PID 2>/dev/null || true
-  trap 'echo "Restarting enabled ashlet background service..."; brew services start ashlet >/dev/null 2>&1' EXIT
+else
+  pkill -f ashletd 2>/dev/null
+fi
+sleep 1
+
+if [ "$WAS_RUNNING_BY_BREW" = true ]; then
+  trap 'brew services start ashlet >/dev/null 2>&1' EXIT
 fi
 
 ./ashletd $VERBOSE
