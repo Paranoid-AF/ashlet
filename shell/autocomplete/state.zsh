@@ -17,6 +17,8 @@ typeset -gi _ashlet_next_req_id=1        # Counter for outgoing request IDs
 typeset -gi _ashlet_last_resp_id=0       # Highest response ID accepted
 typeset -gi _ashlet_wait_fd=0            # File descriptor for debounce timer
 typeset -gi _ashlet_complete_fd=0        # File descriptor for async completion
+typeset -gi _ashlet_saved_stdout=0       # Saved stdout fd for preexec restoration
+typeset -gi _ashlet_saved_stderr=0       # Saved stderr fd for preexec restoration
 
 # =============================================================================
 # State Management Functions
