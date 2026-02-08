@@ -70,15 +70,12 @@ zle -N .ashlet:line-finish
     .ashlet:context-request "$PWD"
 }
 
-# Restore stdout/stderr before command execution.
-# Async fd handling in ZLE widgets (sysopen, process substitution, exec {fd}<&-)
-# can cause standard fds to be redirected away from the terminal. This ensures
-# commands always have working stdout and stderr.
-# We restore from saved descriptors rather than opening new /dev/tty handles
-# to preserve TTY properties (color depth, etc.) for child processes.
+# NOTE: preexec hook removed - async fd handling already guards against closing
+# standard fds (0, 1, 2) via explicit checks like (( fd > 2 )).
+# The previous restoration logic was causing stderr/stdout issues for child processes.
 .ashlet:preexec-hook() {
-    [[ -t 1 ]] || exec 1>&$_ashlet_saved_stdout
-    [[ -t 2 ]] || exec 2>&$_ashlet_saved_stderr
+    # No-op: hook removed but keeping function for backward compatibility
+    :
 }
 
 # =============================================================================
@@ -87,10 +84,6 @@ zle -N .ashlet:line-finish
 
 # Register hooks using add-zle-hook-widget for proper chaining
 .ashlet:register-hooks() {
-    # Save original stdout/stderr for restoration in preexec hook
-    # Use high fd numbers (10, 11) that won't conflict with user code
-    exec {_ashlet_saved_stdout}>&1 {_ashlet_saved_stderr}>&2
-
     add-zle-hook-widget line-init      .ashlet:line-init
     add-zle-hook-widget line-pre-redraw .ashlet:line-pre-redraw
     add-zle-hook-widget line-finish    .ashlet:line-finish
