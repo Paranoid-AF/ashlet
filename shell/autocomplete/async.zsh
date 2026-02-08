@@ -9,8 +9,8 @@
 .ashlet:trigger-async() {
     # Cancel any pending debounce timer
     if (( _ashlet_wait_fd > 2 )); then
-        zle -F $_ashlet_wait_fd 2>/dev/null
-        exec {_ashlet_wait_fd}<&- 2>/dev/null
+        zle -F $_ashlet_wait_fd
+        exec {_ashlet_wait_fd}<&-
         _ashlet_wait_fd=0
     fi
 
@@ -22,9 +22,9 @@
     if sysopen -r -o cloexec -u fd <(
         # Convert ASHLET_DELAY (seconds) to centiseconds for zselect
         local -i timeout=$(( [#10] 100 * ASHLET_DELAY ))
-        zselect -t $timeout 2>/dev/null
+        zselect -t $timeout
         print
-    ) 2>/dev/null; then
+    ); then
         _ashlet_wait_fd=$fd
         zle -Fw $fd .ashlet:wait-callback
     else
@@ -38,8 +38,8 @@
     local -i fd=$1
 
     # Unregister and close fd (guard: never close standard fds 0-2)
-    zle -F $fd 2>/dev/null
-    (( fd > 2 )) && exec {fd}<&- 2>/dev/null
+    zle -F $fd
+    (( fd > 2 )) && exec {fd}<&-
     _ashlet_wait_fd=0
 
     # Abort if keys are queued (user is still typing)
@@ -61,8 +61,8 @@ zle -N .ashlet:wait-callback
 .ashlet:fetch-async() {
     # Cancel any pending fetch
     if (( _ashlet_complete_fd > 2 )); then
-        zle -F $_ashlet_complete_fd 2>/dev/null
-        exec {_ashlet_complete_fd}<&- 2>/dev/null
+        zle -F $_ashlet_complete_fd
+        exec {_ashlet_complete_fd}<&-
         _ashlet_complete_fd=0
     fi
 
@@ -73,7 +73,7 @@ zle -N .ashlet:wait-callback
     local fd=0
     if sysopen -r -o cloexec -u fd <(
         .ashlet:request "$req_id" "$BUFFER" "$CURSOR" "$PWD" "$$"
-    ) 2>/dev/null; then
+    ); then
         _ashlet_complete_fd=$fd
         zle -Fw $fd .ashlet:complete-callback
     fi
@@ -85,13 +85,13 @@ zle -N .ashlet:wait-callback
     local data=""
 
     # Read all available data
-    while IFS= read -r -u $fd line 2>/dev/null; do
+    while IFS= read -r -u $fd line; do
         data+="$line"
     done
 
     # Unregister and close fd (guard: never close standard fds 0-2)
-    zle -F $fd 2>/dev/null
-    (( fd > 2 )) && exec {fd}<&- 2>/dev/null
+    zle -F $fd
+    (( fd > 2 )) && exec {fd}<&-
     _ashlet_complete_fd=0
 
     # Validate response
@@ -136,13 +136,13 @@ zle -N .ashlet:complete-callback
 # Close all async file descriptors
 .ashlet:cleanup-async() {
     if (( _ashlet_wait_fd > 2 )); then
-        zle -F $_ashlet_wait_fd 2>/dev/null
-        exec {_ashlet_wait_fd}<&- 2>/dev/null
+        zle -F $_ashlet_wait_fd
+        exec {_ashlet_wait_fd}<&-
         _ashlet_wait_fd=0
     fi
     if (( _ashlet_complete_fd > 2 )); then
-        zle -F $_ashlet_complete_fd 2>/dev/null
-        exec {_ashlet_complete_fd}<&- 2>/dev/null
+        zle -F $_ashlet_complete_fd
+        exec {_ashlet_complete_fd}<&-
         _ashlet_complete_fd=0
     fi
 }

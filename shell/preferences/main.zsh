@@ -137,10 +137,6 @@ source "${basedir}/config.zsh" || return 1
 # Main entry point - the 'ashlet' command
 ashlet() {
     emulate -L zsh
-    # Restore stdout/stderr if redirected (e.g. by async fd handling)
-    # Use saved descriptors to preserve TTY properties
-    [[ -t 1 ]] || exec 1>&${_ashlet_saved_stdout:-1}
-    [[ -t 2 ]] || exec 2>&${_ashlet_saved_stderr:-2}
     case "$1" in
         --config|-c)
             .ashlet:edit-config
