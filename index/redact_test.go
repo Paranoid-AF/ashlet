@@ -95,6 +95,50 @@ func TestRedactCommands(t *testing.T) {
 	}
 }
 
+func TestFilterQuoteContent(t *testing.T) {
+	tests := []struct {
+		input string
+		want  string
+	}{
+		{`git commit -m "hello world"`, `git commit -m ""`},
+		{`echo "[INIT] initialized" > demo.log`, `echo "" > demo.log`},
+		{`node -e 'console.log("hello world!")'`, `node -e ''`},
+		{`git status`, `git status`},
+		{`echo "escaped \" quote"`, `echo ""`},
+		{`python -c 'print(1+2)'`, `python -c ''`},
+		{`grep "foo" bar.txt | wc -l`, `grep "" bar.txt | wc -l`},
+		{`echo ""`, `echo ""`},
+		{`echo ''`, `echo ''`},
+		{`ls -la`, `ls -la`},
+	}
+	for _, tt := range tests {
+		got := FilterQuoteContent(tt.input)
+		if got != tt.want {
+			t.Errorf("FilterQuoteContent(%q) = %q, want %q", tt.input, got, tt.want)
+		}
+	}
+}
+
+func TestFilterQuoteContentSliceDedup(t *testing.T) {
+	cmds := []string{
+		`git commit -m "fix: bug A"`,
+		`git commit -m "feat: feature B"`,
+		`git status`,
+		`echo "hello"`,
+		`echo "world"`,
+	}
+	got := FilterQuoteContentSlice(cmds)
+	want := []string{`git commit -m ""`, `git status`, `echo ""`}
+	if len(got) != len(want) {
+		t.Fatalf("FilterQuoteContentSlice: got %d items %v, want %d items %v", len(got), got, len(want), want)
+	}
+	for i := range want {
+		if got[i] != want[i] {
+			t.Errorf("FilterQuoteContentSlice[%d] = %q, want %q", i, got[i], want[i])
+		}
+	}
+}
+
 func TestRegexRedactFallback(t *testing.T) {
 	// Test the regex fallback directly
 	tests := []struct {

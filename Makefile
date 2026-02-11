@@ -1,10 +1,14 @@
-.PHONY: build test lint format clean bootstrap
+.PHONY: build repl test lint format clean bootstrap
 
 bootstrap:
 	go mod download
 
 build:
 	go build -v -o ashletd ./serve
+
+repl:
+	go build -v -o ashlet-repl ./repl
+	exec ./ashlet-repl
 
 test:
 	go test ./...
@@ -36,4 +40,4 @@ format:
 	fi
 
 clean:
-	rm -f ashletd
+	rm -f ashletd ashlet-repl

@@ -92,7 +92,7 @@ func TestDirCacheGatherPopulatesListing(t *testing.T) {
 	}
 }
 
-func TestExtractPackageJsonScripts(t *testing.T) {
+func TestExtractPackageJSONScripts(t *testing.T) {
 	content := `{
 		"name": "myapp",
 		"scripts": {
@@ -101,7 +101,7 @@ func TestExtractPackageJsonScripts(t *testing.T) {
 			"start": "node ."
 		}
 	}`
-	result := extractPackageJsonScripts(content)
+	result := extractPackageJSONScripts(content)
 	if result == "" {
 		t.Fatal("expected non-empty result")
 	}
@@ -110,9 +110,9 @@ func TestExtractPackageJsonScripts(t *testing.T) {
 	}
 }
 
-func TestExtractPackageJsonScriptsNoScripts(t *testing.T) {
+func TestExtractPackageJSONScriptsNoScripts(t *testing.T) {
 	content := `{"name": "myapp", "version": "1.0.0"}`
-	result := extractPackageJsonScripts(content)
+	result := extractPackageJSONScripts(content)
 	if result != "" {
 		t.Errorf("expected empty for no scripts, got %q", result)
 	}
@@ -145,6 +145,39 @@ VERSION := 1.0
 	}
 	if strings.Contains(result, "VERSION") {
 		t.Errorf("should not include assignment as target, got %q", result)
+	}
+}
+
+func TestExtractJustfileRecipes(t *testing.T) {
+	content := `# Justfile
+bun := "bun"
+
+# Default target
+default: list
+
+# Development
+dev:
+    @echo "Starting..."
+    cd apps && bun run start
+
+build: build-server build-web
+    @echo "Done"
+
+# Cleanup
+clean:
+    rm -rf dist/
+
+list:
+    @just --list
+`
+	result := extractJustfileRecipes(content)
+	for _, want := range []string{"default", "dev", "build", "clean", "list"} {
+		if !strings.Contains(result, want) {
+			t.Errorf("expected %q recipe, got %q", want, result)
+		}
+	}
+	if strings.Contains(result, "bun") {
+		t.Errorf("should not include variable assignment as recipe, got %q", result)
 	}
 }
 
@@ -262,7 +295,7 @@ func TestGatherManifests(t *testing.T) {
 	os.WriteFile(filepath.Join(dir, "package.json"), []byte(pkgJSON), 0644)
 
 	out := make(map[string]string)
-	gatherManifests(context.Background(), dir, out)
+	gatherManifests(dir, out)
 
 	if _, ok := out["package.json scripts"]; !ok {
 		t.Error("expected package.json scripts in manifest output")

@@ -27,6 +27,9 @@ func NewEmbedder(baseURL, apiKey, model string) *Embedder {
 	}
 }
 
+// Model returns the embedding model name.
+func (e *Embedder) Model() string { return e.model }
+
 type embeddingRequest struct {
 	Input interface{} `json:"input"` // string or []string
 	Model string      `json:"model"`

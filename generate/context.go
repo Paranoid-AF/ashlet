@@ -66,7 +66,7 @@ func (g *Gatherer) Gather(ctx context.Context, req *ashlet.Request) *Info {
 		defer timer.Stop()
 		select {
 		case <-g.historyIndexer.InitDone():
-			if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 5); err == nil && len(cmds) > 0 {
+			if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 20); err == nil && len(cmds) > 0 {
 				info.RelevantCommands = cmds
 			}
 		case <-timer.C:
@@ -84,7 +84,7 @@ func (g *Gatherer) Gather(ctx context.Context, req *ashlet.Request) *Info {
 		// Non-blocking semantic search if indexing has completed
 		select {
 		case <-g.historyIndexer.InitDone():
-			if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 5); err == nil && len(cmds) > 0 {
+			if cmds, err := g.historyIndexer.SearchRelevant(req.Input, 20); err == nil && len(cmds) > 0 {
 				info.RelevantCommands = cmds
 			}
 		default:
@@ -93,6 +93,24 @@ func (g *Gatherer) Gather(ctx context.Context, req *ashlet.Request) *Info {
 	}
 
 	return info
+}
+
+// LoadIndexCache loads a previously saved embedding cache from disk.
+func (g *Gatherer) LoadIndexCache(path string) error {
+	model := g.historyIndexer.EmbeddingModel()
+	if model == "" {
+		return nil
+	}
+	return g.historyIndexer.LoadCache(path, model)
+}
+
+// SaveIndexCache writes the current embedding index to disk.
+func (g *Gatherer) SaveIndexCache(path string) error {
+	model := g.historyIndexer.EmbeddingModel()
+	if model == "" {
+		return nil
+	}
+	return g.historyIndexer.SaveCache(path, model)
 }
 
 // Close releases resources held by the gatherer.

@@ -240,13 +240,13 @@ func TestChainSeparator(t *testing.T) {
 		input string
 		want  string
 	}{
-		{`git commit -m "done" && `, ""},      // already has && with trailing space
-		{`git commit -m "done" &&`, " "},       // has && but no space
-		{`echo hello |`, " "},                  // pipe, no space
-		{`echo hello | `, ""},                  // pipe with space
-		{`echo hello ;`, " "},                  // semicolon, no space
-		{`git commit -m "done"`, " && "},       // no operator
-		{`git status`, " && "},                 // plain command
+		{`git commit -m "done" && `, ""}, // already has && with trailing space
+		{`git commit -m "done" &&`, " "}, // has && but no space
+		{`echo hello |`, " "},            // pipe, no space
+		{`echo hello | `, ""},            // pipe with space
+		{`echo hello ;`, " "},            // semicolon, no space
+		{`git commit -m "done"`, " && "}, // no operator
+		{`git status`, " && "},           // plain command
 	}
 	for _, tt := range tests {
 		got := chainSeparator(tt.input)
@@ -525,8 +525,6 @@ func TestBuildUserMessageWithDirContext(t *testing.T) {
 	dirCtx := &DirContext{
 		CwdListing:     "node_modules package.json src",
 		PackageManager: "pnpm",
-		GitRoot:        "/home/user/project",
-		GitLog:         "abc123 feat: initial",
 		CwdManifests:   map[string]string{"package.json scripts": `"build": "tsc", "test": "jest"`},
 	}
 	msg := e.buildUserMessage(req, &Info{}, dirCtx)
@@ -536,12 +534,6 @@ func TestBuildUserMessageWithDirContext(t *testing.T) {
 	}
 	if !strings.Contains(msg, "pkg: pnpm") {
 		t.Error("user message should contain package manager")
-	}
-	if !strings.Contains(msg, "git root: /home/user/project") {
-		t.Error("user message should contain git root")
-	}
-	if !strings.Contains(msg, "log: abc123 feat: initial") {
-		t.Error("user message should contain git log")
 	}
 }
 
@@ -680,52 +672,6 @@ func TestFilterCandidateQuotesEmpty(t *testing.T) {
 	result := filterCandidateQuotes(nil, "git s")
 	if result != nil {
 		t.Errorf("expected nil for empty input, got %v", result)
-	}
-}
-
-// --- Quote content helpers ---
-
-func TestFilterQuoteContent(t *testing.T) {
-	tests := []struct {
-		input string
-		want  string
-	}{
-		{`git commit -m "hello world"`, `git commit -m ""`},
-		{`echo "[INIT] initialized" > demo.log`, `echo "" > demo.log`},
-		{`node -e 'console.log("hello world!")'`, `node -e ''`},
-		{`git status`, `git status`},
-		{`echo "escaped \" quote"`, `echo ""`},
-		{`python -c 'print(1+2)'`, `python -c ''`},
-		{`grep "foo" bar.txt | wc -l`, `grep "" bar.txt | wc -l`},
-		{`echo ""`, `echo ""`},
-		{`echo ''`, `echo ''`},
-		{`ls -la`, `ls -la`},
-	}
-	for _, tt := range tests {
-		got := filterQuoteContent(tt.input)
-		if got != tt.want {
-			t.Errorf("filterQuoteContent(%q) = %q, want %q", tt.input, got, tt.want)
-		}
-	}
-}
-
-func TestFilterQuoteContentSliceDedup(t *testing.T) {
-	cmds := []string{
-		`git commit -m "fix: bug A"`,
-		`git commit -m "feat: feature B"`,
-		`git status`,
-		`echo "hello"`,
-		`echo "world"`,
-	}
-	got := filterQuoteContentSlice(cmds)
-	want := []string{`git commit -m ""`, `git status`, `echo ""`}
-	if len(got) != len(want) {
-		t.Fatalf("filterQuoteContentSlice: got %d items %v, want %d items %v", len(got), got, len(want), want)
-	}
-	for i := range want {
-		if got[i] != want[i] {
-			t.Errorf("filterQuoteContentSlice[%d] = %q, want %q", i, got[i], want[i])
-		}
 	}
 }
 
@@ -1008,11 +954,8 @@ func TestGathererWithRawHistory(t *testing.T) {
 
 	// RecentCommands may be empty if no history file, but the code path should
 	// have attempted to read them (not skipped due to noRawHistory gate).
-	// We verify the field is at least initialized (not nil from the gate path).
-	if info.RecentCommands == nil {
-		// nil is acceptable for no history file; the important thing is we
-		// didn't return via the embedding-gate path (which sets RecentCommands
-		// to nil and only populates RelevantCommands).
-		// Since noRawHistory=false, the code should hit the default branch.
-	}
+	// nil is acceptable for no history file; the important thing is we
+	// didn't return via the embedding-gate path (which sets RecentCommands
+	// to nil and only populates RelevantCommands).
+	_ = info.RecentCommands
 }

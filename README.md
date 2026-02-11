@@ -219,6 +219,7 @@ shell/          Zsh client — captures input, communicates over Unix socket, re
 generate/       Completion engine — context gathering, API inference, candidate parsing
 index/          History indexing and embedding via API
 serve/          Daemon entry point and Unix socket server (ashletd)
+repl/           Interactive test REPL with cursor tracking (dev-only, not distributed)
 default/        Embedded default config and prompt template
 ashlet.go       Shared IPC types (Request, Response, Error)
 config.go       Configuration types and path resolution
@@ -234,6 +235,7 @@ make build        # Build ashletd
 make test         # Go tests + shell tests (bats)
 make lint         # go vet + staticcheck + shellcheck
 make format       # gofmt + shfmt
+make repl         # Build and run the test REPL (dev-only)
 ```
 
 ### Running Locally
@@ -254,6 +256,17 @@ Open two terminals to test end-to-end:
 ```
 
 This launches an interactive zsh session with ashlet pre-loaded. Type commands to see completions.
+
+### Test REPL
+
+For testing completions without the daemon or shell client:
+
+```bash
+make repl             # interactive, TOML output on screen
+make repl > log.toml  # save structured output to file
+```
+
+The REPL calls the completion engine directly with raw terminal cursor tracking. Each submission outputs structured TOML (context gathered, request, response). Use `:cwd <path>` to change directory, `:quit` to exit. Embeddings are cached to `.cache/` in the project root for fast subsequent runs (REPL-only — the daemon does not use disk cache).
 
 ## Why Name It `ashlet`?
 

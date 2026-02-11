@@ -1,8 +1,12 @@
 # Go
 ashletd
+ashlet-repl
 *.exe
 *.test
 *.out
+
+# REPL embedding cache
+.cache/
 
 # Unix socket files
 *.sock
