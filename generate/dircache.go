@@ -100,12 +100,12 @@ func (dc *DirCache) Gather(ctx context.Context, cwd string) {
 		ch <- result{"git_root", out}
 	}()
 
-	// git staged (single-line, space-separated)
+	// git staged (single-line, space-separated, with change types)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		out := strings.TrimSpace(runCmd(ctx, cwd, "git", "diff", "--cached", "--name-only"))
-		ch <- result{"git_staged", toSingleLine(out, fieldMaxBytes)}
+		out := strings.TrimSpace(runCmd(ctx, cwd, "git", "diff", "--cached", "--name-status"))
+		ch <- result{"git_staged", parseStagedFiles(out, fieldMaxBytes)}
 	}()
 
 	// Collect parallel results
@@ -352,6 +352,34 @@ func detectPackageManager(cwd, gitRoot string) string {
 		}
 	}
 	return ""
+}
+
+// parseStagedFiles parses `git diff --cached --name-status` output into a
+// space-separated string with change-type prefixes (e.g. "M:file.go A:new.go").
+func parseStagedFiles(s string, maxBytes int) string {
+	if s == "" {
+		return ""
+	}
+	var parts []string
+	for _, line := range strings.Split(s, "\n") {
+		fields := strings.Split(line, "\t")
+		if len(fields) < 2 {
+			continue
+		}
+		status := fields[0]
+		// Normalize rename/copy status (R100, C080 → R, C)
+		if len(status) > 1 && (status[0] == 'R' || status[0] == 'C') {
+			status = status[:1]
+		}
+		if status == "R" || status == "C" {
+			if len(fields) >= 3 {
+				parts = append(parts, status+":"+fields[1]+"→"+fields[2])
+			}
+		} else {
+			parts = append(parts, status+":"+fields[1])
+		}
+	}
+	return truncate(strings.Join(parts, " "), maxBytes)
 }
 
 // toSingleLine converts a multi-line string to a single line (space-separated)

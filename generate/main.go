@@ -338,14 +338,14 @@ func (e *Engine) buildUserMessage(req *ashlet.Request, info *Info, dirCtx *DirCo
 	if limit > 5 {
 		limit = 5
 	}
-	recentCmds := filterQuoteContentSlice(index.RedactCommands(info.RecentCommands[:limit]))
+	recentCmds := index.FilterQuoteContentSlice(index.RedactCommands(info.RecentCommands[:limit]))
 	if len(recentCmds) > 0 {
 		sb.WriteString("recent: ")
 		sb.WriteString(strings.Join(recentCmds, ", "))
 		sb.WriteString("\n")
 	}
 
-	relevantCmds := filterQuoteContentSlice(index.RedactCommands(info.RelevantCommands))
+	relevantCmds := index.FilterQuoteContentSlice(index.RedactCommands(info.RelevantCommands))
 	if len(relevantCmds) > 0 {
 		sb.WriteString("related: ")
 		sb.WriteString(strings.Join(relevantCmds, ", "))
@@ -598,7 +598,7 @@ func filterCandidateQuotes(candidates []ashlet.Candidate, input string) []ashlet
 	for _, c := range candidates {
 		cmd := c.Completion
 		if !inputHasQuotes {
-			cmd = filterQuoteContent(cmd)
+			cmd = index.FilterQuoteContent(cmd)
 		}
 
 		if seen[cmd] {
@@ -654,57 +654,6 @@ func findLastClosingQuotePos(s string) int {
 		i++
 	}
 	return lastClose
-}
-
-// filterQuoteContent strips text inside quotes from a command string.
-// Double-quoted content becomes "" and single-quoted content becomes ”.
-// Handles escaped quotes inside quoted strings.
-func filterQuoteContent(cmd string) string {
-	var buf strings.Builder
-	buf.Grow(len(cmd))
-	i := 0
-	for i < len(cmd) {
-		ch := cmd[i]
-		if ch == '"' || ch == '\'' {
-			quote := ch
-			buf.WriteByte(quote)
-			i++
-			// Skip content until matching unescaped closing quote
-			for i < len(cmd) {
-				if cmd[i] == '\\' && i+1 < len(cmd) {
-					i += 2 // skip escaped character
-					continue
-				}
-				if cmd[i] == quote {
-					break
-				}
-				i++
-			}
-			// Write closing quote if found
-			if i < len(cmd) {
-				buf.WriteByte(quote)
-				i++
-			}
-		} else {
-			buf.WriteByte(ch)
-			i++
-		}
-	}
-	return buf.String()
-}
-
-// filterQuoteContentSlice applies filterQuoteContent to each element and deduplicates.
-func filterQuoteContentSlice(cmds []string) []string {
-	seen := make(map[string]bool, len(cmds))
-	out := make([]string, 0, len(cmds))
-	for _, cmd := range cmds {
-		filtered := filterQuoteContent(cmd)
-		if !seen[filtered] {
-			seen[filtered] = true
-			out = append(out, filtered)
-		}
-	}
-	return out
 }
 
 // commonPrefix returns the longest common prefix of two strings.

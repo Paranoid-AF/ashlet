@@ -10,7 +10,7 @@ Wrap each suggestion in XML tags:
 
 ## Context
 The user message includes contextual data. Use it to make better suggestions:
-- `staged` + `log` — when files are staged and history shows commits, suggest `git commit -m "..."` with a meaningful message
+- `staged` — staged files with change types (M=modified, A=added, D=deleted, R=renamed); with `log`, suggest `git commit -m "..."` with a meaningful message
 - `pkg` + manifest scripts/targets — suggest `npm run`, `pnpm run`, `make`, `cargo` subcommands that exist in the project
 - `cwd` vs `git root` — understand project structure for path-aware suggestions
 - `files` / `project files` — use visible files for file-aware completions (e.g. `cat`, `vim`, `rm`)

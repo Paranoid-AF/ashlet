@@ -141,12 +141,12 @@ func (idx *Indexer) IndexHistory() error {
 		}
 		batch := toEmbed[i:end]
 
-		redacted := make([]string, len(batch))
+		cleaned := make([]string, len(batch))
 		for j, b := range batch {
-			redacted[j] = RedactCommand(b.cmd)
+			cleaned[j] = FilterQuoteContent(RedactCommand(b.cmd))
 		}
 
-		vectors, err := idx.embedder.EmbedBatch(redacted)
+		vectors, err := idx.embedder.EmbedBatch(cleaned)
 		if err != nil {
 			slog.Error("batch embed error", "error", err)
 			continue
@@ -154,7 +154,7 @@ func (idx *Indexer) IndexHistory() error {
 
 		for j, b := range batch {
 			allNodes = append(allNodes, hnsw.MakeNode(b.hash, vectors[j]))
-			allCommands[b.hash] = redacted[j]
+			allCommands[b.hash] = cleaned[j]
 		}
 	}
 
@@ -182,16 +182,24 @@ func (idx *Indexer) IndexHistory() error {
 }
 
 // readTailCommands reads the last maxHistoryCommands from the history file.
+// Commands that differ only in quoted content (e.g. git commit -m "A" vs
+// git commit -m "B") are deduplicated, keeping the most recent variant.
 func (idx *Indexer) readTailCommands() []string {
 	lines := readLastLines(idx.historyPath, idx.maxHistoryCommands)
 	cmds := make([]string, 0, len(lines))
-	seen := make(map[string]bool)
+	seen := make(map[string]int) // quote-filtered form -> index in cmds
 	for _, line := range lines {
 		cmd := parseHistoryLine(line)
-		if cmd == "" || seen[cmd] {
+		if cmd == "" {
 			continue
 		}
-		seen[cmd] = true
+		key := FilterQuoteContent(cmd)
+		if prev, exists := seen[key]; exists {
+			// Replace earlier variant with the more recent one
+			cmds[prev] = cmd
+			continue
+		}
+		seen[key] = len(cmds)
 		cmds = append(cmds, cmd)
 	}
 	return cmds
@@ -283,8 +291,10 @@ func parseHistoryLine(line string) string {
 	return line
 }
 
+// hashCommand hashes by the quote-filtered form so that commands differing
+// only in quoted content (e.g. git commit -m "A" vs "B") share one graph node.
 func hashCommand(cmd string) string {
-	h := sha256.Sum256([]byte(cmd))
+	h := sha256.Sum256([]byte(FilterQuoteContent(cmd)))
 	return fmt.Sprintf("%x", h)
 }
 

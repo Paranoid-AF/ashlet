@@ -68,6 +68,55 @@ func RedactCommands(cmds []string) []string {
 	return out
 }
 
+// FilterQuoteContent strips text inside quotes from a command string.
+// Double-quoted content becomes "" and single-quoted content becomes ”.
+// Handles escaped quotes inside quoted strings.
+func FilterQuoteContent(cmd string) string {
+	var buf strings.Builder
+	buf.Grow(len(cmd))
+	i := 0
+	for i < len(cmd) {
+		ch := cmd[i]
+		if ch == '"' || ch == '\'' {
+			quote := ch
+			buf.WriteByte(quote)
+			i++
+			for i < len(cmd) {
+				if cmd[i] == '\\' && i+1 < len(cmd) {
+					i += 2
+					continue
+				}
+				if cmd[i] == quote {
+					break
+				}
+				i++
+			}
+			if i < len(cmd) {
+				buf.WriteByte(quote)
+				i++
+			}
+		} else {
+			buf.WriteByte(ch)
+			i++
+		}
+	}
+	return buf.String()
+}
+
+// FilterQuoteContentSlice applies FilterQuoteContent to each element and deduplicates.
+func FilterQuoteContentSlice(cmds []string) []string {
+	seen := make(map[string]bool, len(cmds))
+	out := make([]string, 0, len(cmds))
+	for _, cmd := range cmds {
+		filtered := FilterQuoteContent(cmd)
+		if !seen[filtered] {
+			seen[filtered] = true
+			out = append(out, filtered)
+		}
+	}
+	return out
+}
+
 var (
 	reBraceVar  = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 	reSimpleVar = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)

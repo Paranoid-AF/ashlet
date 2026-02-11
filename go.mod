@@ -6,6 +6,7 @@ require (
 	github.com/BurntSushi/toml v1.6.0
 	github.com/coder/hnsw v0.6.1
 	github.com/jellydator/ttlcache/v3 v3.4.0
+	golang.org/x/term v0.40.0
 	mvdan.cc/sh/v3 v3.12.0
 )
 
@@ -17,5 +18,4 @@ require (
 	golang.org/x/exp v0.0.0-20240506185415-9bf2ced13842 // indirect
 	golang.org/x/sync v0.15.0 // indirect
 	golang.org/x/sys v0.41.0 // indirect
-	golang.org/x/term v0.40.0 // indirect
 )
