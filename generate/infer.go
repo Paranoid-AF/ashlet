@@ -52,11 +52,11 @@ func (g *Generator) Close() {}
 // --- Responses API ---
 
 type responsesRequest struct {
-	Model       string            `json:"model"`
-	Input       []responsesInput  `json:"input"`
-	MaxTokens   int               `json:"max_output_tokens,omitempty"`
-	Temperature float64           `json:"temperature,omitempty"`
-	Stop        []string          `json:"stop,omitempty"`
+	Model       string           `json:"model"`
+	Input       []responsesInput `json:"input"`
+	MaxTokens   int              `json:"max_output_tokens,omitempty"`
+	Temperature float64          `json:"temperature,omitempty"`
+	Stop        []string         `json:"stop,omitempty"`
 }
 
 type responsesInput struct {
@@ -70,8 +70,8 @@ type responsesResponse struct {
 }
 
 type responsesOutput struct {
-	Type    string              `json:"type"`
-	Content []responsesContent  `json:"content,omitempty"`
+	Type    string             `json:"type"`
+	Content []responsesContent `json:"content,omitempty"`
 }
 
 type responsesContent struct {

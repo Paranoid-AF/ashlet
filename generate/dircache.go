@@ -20,13 +20,11 @@ import (
 // DirContext holds gathered context for one directory.
 type DirContext struct {
 	CwdPath        string
-	CwdListing     string            // ls -a output (space-separated)
+	CwdListing     string            // ls -A output (space-separated, no . or ..)
 	CwdManifests   map[string]string // filename label -> extracted content
 	PackageManager string            // detected from lockfile (pnpm, yarn, bun, npm, cargo)
-	GitRoot        string
 	GitRootListing string
 	GitStagedFiles string
-	GitLog         string
 	GitManifests   map[string]string // manifest files at git root (if different from cwd)
 }
 
@@ -85,16 +83,16 @@ func (dc *DirCache) Gather(ctx context.Context, cwd string) {
 
 	var wg sync.WaitGroup
 
-	// ls -a (cwd)
+	// ls -A (cwd, excludes . and ..)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
-		out := runCmd(ctx, cwd, "ls", "-a")
+		out := runCmd(ctx, cwd, "ls", "-A")
 		listing := strings.Join(strings.Fields(out), " ")
 		ch <- result{"cwd_listing", truncate(listing, fieldMaxBytes)}
 	}()
 
-	// git root
+	// git root (used internally, not sent to prompt)
 	wg.Add(1)
 	go func() {
 		defer wg.Done()
@@ -110,45 +108,36 @@ func (dc *DirCache) Gather(ctx context.Context, cwd string) {
 		ch <- result{"git_staged", toSingleLine(out, fieldMaxBytes)}
 	}()
 
-	// git log (single-line, semicolon-separated)
-	wg.Add(1)
-	go func() {
-		defer wg.Done()
-		out := strings.TrimSpace(runCmd(ctx, cwd, "git", "log", "--oneline", "-5"))
-		ch <- result{"git_log", toSingleLine(out, fieldMaxBytes)}
-	}()
-
 	// Collect parallel results
 	go func() {
 		wg.Wait()
 		close(ch)
 	}()
 
+	var gitRoot string
 	for r := range ch {
 		switch r.key {
 		case "cwd_listing":
 			entry.CwdListing = r.val
 		case "git_root":
-			entry.GitRoot = r.val
+			gitRoot = r.val
 		case "git_staged":
 			entry.GitStagedFiles = r.val
-		case "git_log":
-			entry.GitLog = r.val
 		}
 	}
 
 	// After git root is known, gather git-root listing and manifests
-	if entry.GitRoot != "" && entry.GitRoot != cwd {
-		out := runCmd(ctx, entry.GitRoot, "ls", "-a")
+	if gitRoot != "" && gitRoot != cwd {
+		out := runCmd(ctx, gitRoot, "ls", "-A")
 		entry.GitRootListing = truncate(strings.Join(strings.Fields(out), " "), fieldMaxBytes)
-		gatherManifests(ctx, entry.GitRoot, entry.GitManifests)
+		gatherManifests(gitRoot, entry.GitManifests)
 	}
 
 	// Gather cwd manifests
-	gatherManifests(ctx, cwd, entry.CwdManifests)
+	gatherManifests(cwd, entry.CwdManifests)
 
 	// Detect package manager
-	entry.PackageManager = detectPackageManager(cwd, entry.GitRoot)
+	entry.PackageManager = detectPackageManager(cwd, gitRoot)
 
 	dc.cache.Set(cwd, entry, ttlcache.DefaultTTL)
 
@@ -170,13 +159,14 @@ func runCmd(ctx context.Context, dir string, name string, args ...string) string
 var manifestFiles = []string{
 	"package.json",
 	"Makefile",
+	"justfile",
 	"Cargo.toml",
 	"pyproject.toml",
 	"go.mod",
 	"CMakeLists.txt",
 }
 
-func gatherManifests(ctx context.Context, dir string, out map[string]string) {
+func gatherManifests(dir string, out map[string]string) {
 	for _, name := range manifestFiles {
 		path := filepath.Join(dir, name)
 		info, err := os.Stat(path)
@@ -192,9 +182,11 @@ func gatherManifests(ctx context.Context, dir string, out map[string]string) {
 		var extracted string
 		switch name {
 		case "package.json":
-			extracted = extractPackageJsonScripts(string(data))
+			extracted = extractPackageJSONScripts(string(data))
 		case "Makefile":
 			extracted = extractMakefileTargets(string(data))
+		case "justfile":
+			extracted = extractJustfileRecipes(string(data))
 		case "Cargo.toml":
 			extracted = extractCargoInfo(string(data))
 		case "go.mod":
@@ -211,14 +203,16 @@ func gatherManifests(ctx context.Context, dir string, out map[string]string) {
 				label = "package.json scripts"
 			} else if name == "Makefile" {
 				label = "Makefile targets"
+			} else if name == "justfile" {
+				label = "justfile recipes"
 			}
 			out[label] = extracted
 		}
 	}
 }
 
-// extractPackageJsonScripts extracts the "scripts" object from package.json.
-func extractPackageJsonScripts(content string) string {
+// extractPackageJSONScripts extracts the "scripts" object from package.json.
+func extractPackageJSONScripts(content string) string {
 	var pkg map[string]json.RawMessage
 	if err := json.Unmarshal([]byte(content), &pkg); err != nil {
 		return ""
@@ -270,6 +264,38 @@ func extractMakefileTargets(content string) string {
 		}
 	}
 	return truncate(strings.Join(targets, ", "), manifestMaxBytes)
+}
+
+// extractJustfileRecipes extracts recipe names from a justfile.
+func extractJustfileRecipes(content string) string {
+	var recipes []string
+	seen := make(map[string]bool)
+	scanner := bufio.NewScanner(strings.NewReader(content))
+	for scanner.Scan() {
+		line := scanner.Text()
+		// Skip empty lines, comments, indented lines (recipe body)
+		if len(line) == 0 || line[0] == '#' || line[0] == ' ' || line[0] == '\t' {
+			continue
+		}
+		// Skip variable assignments (name := value)
+		if strings.Contains(line, ":=") {
+			continue
+		}
+		idx := strings.IndexByte(line, ':')
+		if idx <= 0 {
+			continue
+		}
+		recipe := strings.TrimSpace(line[:idx])
+		// Skip recipes with special characters
+		if strings.ContainsAny(recipe, "${}()") {
+			continue
+		}
+		if !seen[recipe] {
+			seen[recipe] = true
+			recipes = append(recipes, recipe)
+		}
+	}
+	return truncate(strings.Join(recipes, ", "), manifestMaxBytes)
 }
 
 type cargoToml struct {

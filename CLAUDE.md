@@ -13,8 +13,9 @@ Flat package layout:
 3. **index/** — History indexing and embedding via API.
 4. **generate/** — Completion orchestration, context gathering, and inference via API.
 5. **serve/** — Daemon entry point and Unix socket server (`ashletd`).
+6. **repl/** — Interactive test REPL (`ashlet-repl`). Dev-only, not distributed.
 
-Dependency graph (no cycles): `root (ashlet) ← index ← generate ← serve (main)`
+Dependency graph (no cycles): `root (ashlet) ← index ← generate ← serve|repl (main)`
 
 ## IPC
 
@@ -80,10 +81,13 @@ When `telemetry.openrouter` is true (default), attribution headers are sent:
 make bootstrap
 
 # Top-level
-make build
+make build          # Build ashletd only
 make test
 make lint
 make clean
+
+# Dev-only: build and run the test REPL (not distributed)
+make repl
 ```
 
 ## Test Commands
@@ -107,6 +111,7 @@ Single Go module at project root:
 - `serve/` — daemon entry point and Unix socket server
 - `generate/` — completion orchestration, context gathering, inference via API
 - `index/` — history indexing, embedding via API
+- `repl/` — interactive test REPL with raw terminal input (dev-only)
 
 ## Development
 
@@ -129,6 +134,15 @@ Runs `make build` then `exec ./ashletd`. Stays in the foreground so you see logs
 
 Checks for dependencies (`zsh`, `socat`, `jq`), then launches an interactive zsh session with ashlet pre-loaded via a temporary `ZDOTDIR`. Type commands to see completions.
 
+**Alternative — test REPL** (no daemon, no shell client needed):
+
+```bash
+make repl            # build and run ashlet-repl
+make repl > log.toml # save TOML output to file
+```
+
+Interactive REPL that calls the completion engine directly with raw terminal cursor tracking. Outputs structured TOML to stdout (context, request, response per entry). Use `:cwd <path>` to change directory, `:quit` to exit. Dev-only, not distributed. Caches embeddings to `.cache/embeddings.json` in project root for fast subsequent runs (REPL-only, the daemon does not use disk cache).
+
 ## Homebrew Tap
 
 - **Tap repo**: `https://github.com/Paranoid-AF/homebrew-tap.git` (local: `~/Repositories/homebrew-tap`)
@@ -142,5 +156,5 @@ Checks for dependencies (`zsh`, `socat`, `jq`), then launches an interactive zsh
 - Shell integration must handle cursor position manipulation correctly
 - Shell integration is Zsh-only (requires Zsh 5.3+)
 - Config/prompt files created on-demand via `ashlet` command only
-- Embeddings stored in-memory with TTL (no disk persistence)
+- Embeddings stored in-memory with TTL (no disk persistence in daemon; REPL caches to `.cache/` for fast restarts)
 - `jq` is a required dependency for shell integrations (no grep fallback)

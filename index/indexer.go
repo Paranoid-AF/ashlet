@@ -28,9 +28,9 @@ type Indexer struct {
 	graph    *hnsw.Graph[string] // HNSW graph, keyed by command hash
 	commands map[string]string   // hash -> redacted command text
 
-	stopCh   chan struct{}
-	initDone chan struct{}
-	initOnce sync.Once
+	stopCh    chan struct{}
+	initDone  chan struct{}
+	initOnce  sync.Once
 	closeOnce sync.Once
 }
 
@@ -158,10 +158,20 @@ func (idx *Indexer) IndexHistory() error {
 		}
 	}
 
-	// Single graph insertion under one write lock
+	// Single graph insertion under one write lock.
+	// Re-check for duplicates: another goroutine (e.g. LoadCache) may have
+	// added the same nodes between our earlier read lock and this write lock.
 	if len(allNodes) > 0 {
 		idx.mu.Lock()
-		idx.graph.Add(allNodes...)
+		filtered := allNodes[:0]
+		for _, n := range allNodes {
+			if _, exists := idx.graph.Lookup(n.Key); !exists {
+				filtered = append(filtered, n)
+			}
+		}
+		if len(filtered) > 0 {
+			idx.graph.Add(filtered...)
+		}
 		for k, v := range allCommands {
 			idx.commands[k] = v
 		}

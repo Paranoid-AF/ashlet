@@ -69,7 +69,7 @@ func RedactCommands(cmds []string) []string {
 }
 
 var (
-	reBraceVar = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
+	reBraceVar  = regexp.MustCompile(`\$\{([A-Za-z_][A-Za-z0-9_]*)\}`)
 	reSimpleVar = regexp.MustCompile(`\$([A-Za-z_][A-Za-z0-9_]*)`)
 	reAssign    = regexp.MustCompile(`\b([A-Za-z_][A-Za-z0-9_]*)=(\S+)`)
 )

@@ -108,15 +108,43 @@ func (e *Engine) WarmContext(ctx context.Context, cwd string) {
 	e.dirCache.Gather(ctx, cwd)
 }
 
+// LoadIndexCache loads a previously saved embedding cache from disk.
+func (e *Engine) LoadIndexCache(path string) error {
+	return e.gatherer.LoadIndexCache(path)
+}
+
+// SaveIndexCache writes the current embedding index to disk.
+func (e *Engine) SaveIndexCache(path string) error {
+	return e.gatherer.SaveIndexCache(path)
+}
+
+// CompleteResult holds the response and gathered context from a completion.
+type CompleteResult struct {
+	Response   *ashlet.Response
+	Info       *Info
+	DirContext *DirContext
+}
+
 // Complete processes a completion request and returns a response.
 func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Response {
+	return e.complete(ctx, req).Response
+}
+
+// CompleteVerbose is like Complete but also returns the gathered context.
+func (e *Engine) CompleteVerbose(ctx context.Context, req *ashlet.Request) *CompleteResult {
+	return e.complete(ctx, req)
+}
+
+func (e *Engine) complete(ctx context.Context, req *ashlet.Request) *CompleteResult {
 	// Check if API key is configured
 	if e.generator == nil {
-		return &ashlet.Response{
-			Candidates: []ashlet.Candidate{},
-			Error: &ashlet.Error{
-				Code:    "not_configured",
-				Message: "generation API key not configured; set ASHLET_GENERATION_API_KEY or run 'ashlet --config'",
+		return &CompleteResult{
+			Response: &ashlet.Response{
+				Candidates: []ashlet.Candidate{},
+				Error: &ashlet.Error{
+					Code:    "not_configured",
+					Message: "generation API key not configured; set ASHLET_GENERATION_API_KEY or run 'ashlet --config'",
+				},
 			},
 		}
 	}
@@ -132,7 +160,9 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 
 	// Skip empty or whitespace-only input
 	if strings.TrimSpace(req.Input) == "" {
-		return &ashlet.Response{Candidates: []ashlet.Candidate{}}
+		return &CompleteResult{
+			Response: &ashlet.Response{Candidates: []ashlet.Candidate{}},
+		}
 	}
 
 	info := e.gatherer.Gather(ctx, req)
@@ -144,7 +174,10 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 
 	// Check for cancellation before expensive inference
 	if ctx.Err() != nil {
-		return &ashlet.Response{Candidates: []ashlet.Candidate{}}
+		return &CompleteResult{
+			Response: &ashlet.Response{Candidates: []ashlet.Candidate{}},
+			Info:     info,
+		}
 	}
 
 	maxCandidates := req.MaxCandidates
@@ -162,12 +195,16 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 	output, err := e.generator.Generate(ctx, systemPrompt, userMessage)
 	if err != nil {
 		slog.Error("generation error", "error", err)
-		return &ashlet.Response{
-			Candidates: []ashlet.Candidate{},
-			Error: &ashlet.Error{
-				Code:    "api_error",
-				Message: err.Error(),
+		return &CompleteResult{
+			Response: &ashlet.Response{
+				Candidates: []ashlet.Candidate{},
+				Error: &ashlet.Error{
+					Code:    "api_error",
+					Message: err.Error(),
+				},
 			},
+			Info:       info,
+			DirContext: dirCtx,
 		}
 	}
 
@@ -181,7 +218,11 @@ func (e *Engine) Complete(ctx context.Context, req *ashlet.Request) *ashlet.Resp
 	candidates = filterCandidateQuotes(candidates, input)
 	sortCandidates(candidates, input)
 
-	return &ashlet.Response{Candidates: candidates}
+	return &CompleteResult{
+		Response:   &ashlet.Response{Candidates: candidates},
+		Info:       info,
+		DirContext: dirCtx,
+	}
 }
 
 // PromptData holds the data passed to the prompt template.
@@ -195,10 +236,8 @@ type PromptData struct {
 	Input            string
 	DirListing       string
 	DirManifests     map[string]string
-	GitRoot          string
 	GitRootListing   string
 	GitStagedFiles   string
-	GitLog           string
 	GitManifests     map[string]string
 	PackageManager   string
 }
@@ -270,11 +309,6 @@ func (e *Engine) buildUserMessage(req *ashlet.Request, info *Info, dirCtx *DirCo
 			sb.WriteString(dirCtx.PackageManager)
 			sb.WriteString("\n")
 		}
-		if dirCtx.GitRoot != "" {
-			sb.WriteString("git root: ")
-			sb.WriteString(dirCtx.GitRoot)
-			sb.WriteString("\n")
-		}
 		if dirCtx.GitRootListing != "" {
 			sb.WriteString("project files: ")
 			sb.WriteString(dirCtx.GitRootListing)
@@ -283,11 +317,6 @@ func (e *Engine) buildUserMessage(req *ashlet.Request, info *Info, dirCtx *DirCo
 		if dirCtx.GitStagedFiles != "" {
 			sb.WriteString("staged: ")
 			sb.WriteString(dirCtx.GitStagedFiles)
-			sb.WriteString("\n")
-		}
-		if dirCtx.GitLog != "" {
-			sb.WriteString("log: ")
-			sb.WriteString(dirCtx.GitLog)
 			sb.WriteString("\n")
 		}
 		for name, content := range dirCtx.CwdManifests {
@@ -628,7 +657,7 @@ func findLastClosingQuotePos(s string) int {
 }
 
 // filterQuoteContent strips text inside quotes from a command string.
-// Double-quoted content becomes "" and single-quoted content becomes ''.
+// Double-quoted content becomes "" and single-quoted content becomes ”.
 // Handles escaped quotes inside quoted strings.
 func filterQuoteContent(cmd string) string {
 	var buf strings.Builder
